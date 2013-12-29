@@ -1,0 +1,31 @@
+name:    risk
+version: 0.0.0
+
+category: Operating System
+
+synopsis:    RISK: a Realtime Ifc Separation Kernel.
+description: RISK: a Realtime Ifc Separation Kernel.
+
+author:     Tom Hawkins  <tomahawkins@gmail.com>
+maintainer: Tom Hawkins  <tomahawkins@gmail.com>
+
+license: AllRightsReserved
+license-file: LICENSE
+
+build-type:    Simple
+cabal-version: >= 1.9.2
+
+library
+  build-depends:
+    base >= 4.0
+  exposed-modules:
+    RISK
+    RISK.API
+    RISK.Config
+    RISK.Example
+  ghc-options: -W
+
+source-repository head
+  type:     git
+  location: git://github.com/tomahawkins/risk.git
+
