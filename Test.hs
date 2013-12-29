@@ -3,5 +3,7 @@ module Main (main) where
 import RISK
 
 main :: IO ()
-main = putStrLn $ graphviz exampleConfig
+main = do
+  writeFile "test.dot" $ graphviz exampleConfig
+  writeFile "hello.s"  $ codeGen  exampleAsm
 

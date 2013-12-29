@@ -17,12 +17,14 @@ cabal-version: >= 1.9.2
 
 library
   build-depends:
-    base >= 4.0
+    base  >= 4.0,
+    harpy >= 0.5
   exposed-modules:
     RISK
     RISK.API
     RISK.Config
     RISK.Example
+    RISK.X86_64
   ghc-options: -W
 
 source-repository head

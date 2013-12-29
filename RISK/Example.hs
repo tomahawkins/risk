@@ -1,9 +1,11 @@
 -- | A RISK configuration example.
 module RISK.Example
   ( exampleConfig
+  , exampleAsm
   ) where
 
 import RISK.Config
+import RISK.X86_64
 
 -- | A RISK configuration example.
 exampleConfig :: Config
@@ -31,4 +33,21 @@ exampleConfig = Config
     ]
   , scheduling = []
   }
+
+exampleAsm :: Program
+exampleAsm =
+  [ Custom ".private_extern _main"
+  , Custom ".globl _main"
+  , Label  "_main"
+  , Instr  $ Pushq rbp
+  , Instr  $ Movq  rsp rbp
+  , Custom "  leaq  _helloMessage(%rip), %rdi"
+  , Instr  $ Callq "_puts"
+  , Instr  $ Xorl  eax eax
+  , Instr  $ Popq  rbp
+  , Instr  $ Ret
+  , Custom ".section __TEXT,__cstring,cstring_literals"
+  , Label  "_helloMessage"
+  , Custom "  .asciz \"Hello World!\""
+  ]
 
