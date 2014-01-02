@@ -2,7 +2,7 @@
 module RISK.Config
   ( Config             (..)
   , Partition          (..)
-  , ChannelType        (..)
+  , Channel            (..)
   , ScheduleConstraint (..)
   , Name
   , graphviz
@@ -15,24 +15,25 @@ type Name = String
 
 -- | Overal kernel configuration.
 data Config = Config
-  { partitions :: [Partition]                  -- ^ The list of partitions.
-  , channels   :: [(Name, Name, ChannelType)]  -- ^ The partition communication channels.
-  , scheduling :: [ScheduleConstraint]         -- ^ Partition scheduling constraints.
+  { partitions :: [Partition]              -- ^ The list of partitions.
+  , channels   :: [Channel]                -- ^ The partition communication channels (sender, receiver, buffer size).
+  , scheduling :: [ScheduleConstraint]     -- ^ Partition scheduling constraints.
   }
 
 -- | Partition configuration.
 data Partition = Partition
-  { pName   :: Name     -- ^ The partition name.
-  , pRate   :: Integer  -- ^ Execution rate of partition in Hz.
-  , pMemory :: Integer  -- ^ The memory size allocated to the partition in bytes.
+  { pName   :: Name         -- ^ The partition name.
+  , pRate   :: Maybe Double -- ^ Execution rate of partition in Hz.  If Nothing, thread runs in background.
+  , pMemory :: Integer      -- ^ The memory size allocated to the partition in bytes.
   }
 
--- | Inter partition communication channel types.
-data ChannelType
-  -- | Message passing channel with given buffer size.  If sender overfills buffer, data is lost (no back channel).
-  = MessagePassing Integer
-  -- | Message passing channel with given buffer size.  Back channel allowed, so sender can check buffer state and can block if buffer is full.
-  | MessagePassingAllowBackChannel Integer
+-- | Inter partition communication channel.
+data Channel = Channel
+  { cSender             :: Name       -- ^ Sending partition name.
+  , cSenderBufferSize   :: Integer    -- ^ Sending buffer size in bytes.
+  , cReceiver           :: Name       -- ^ Receiving partition name.
+  , cReceiverBufferSize :: Integer    -- ^ Receiving buffer size in bytes.
+  }
 
 -- | Partition scheduling constraints.
 data ScheduleConstraint
@@ -43,13 +44,16 @@ data ScheduleConstraint
 graphviz :: Config -> String
 graphviz (Config partitions channels _) = unlines $
   [ "digraph risk_config {"
-  , concat [ printf "  %s [label=\"%s\\n%d Hz, %d bytes\"];\n" name name rate size | Partition name rate size <- partitions ]
+  , concat [ printf "  %s [label=\"%s\\n%s, %d bytes\"];\n" name name (rate r) size | Partition name r size <- partitions ]
   , concatMap channel channels
   , "}"
   ]
   where
-  channel (from, to, typ) = case typ of
-    MessagePassing                 size -> printf "  %s -> %s [label=\"%d\"];\n" from to size
-    MessagePassingAllowBackChannel size -> printf "  %s -> %s [label=\"%d (allow backchannel)\"];\n" from to size
+  rate :: Maybe Double -> String
+  rate a = case a of
+    Nothing -> "background"
+    Just a  -> printf "%f Hz" a
 
+  channel :: Channel -> String
+  channel (Channel s sSize r rSize) = printf "  %s -> %s [label=\"%d -> %d\"];\n" s r sSize rSize
 
