@@ -84,6 +84,7 @@ room = message_length <= (head - tail) % buffer_length;
 
 If there is not enough room in the receive buffer, the kernel will drop
 all the remaining messages and no indication will be provided to the sender (no information backchannel).
+The kernel could provide a running counter to indicate to the receiver when messages get dropped.
 
 When the receiving thread is done with a message, it will advance the head pointer
 to the next message:
@@ -93,6 +94,10 @@ head = (head + *head) % buffer_length;
 ```
 
 It is the responsibility of the receiving thread to correctly manage the receiving buffer and the head pointer.
+
+# Virtual Memory
+
+Or not...  Is it possible just to give the threads restricted DMA?
 
 # Links
 
@@ -112,4 +117,5 @@ It is the responsibility of the receiving thread to correctly manage the receivi
   - [QEMU](http://wiki.qemu.org/Main_Page)
 - x86.
   - [x86-64 ABI](http://www.x86-64.org/documentation/abi.pdf)
+
 
