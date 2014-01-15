@@ -1,15 +1,15 @@
--- | A RISK configuration example.
+-- | An example RISK specification
 module RISK.Example
-  ( exampleConfig
+  ( exampleSpec
   , exampleAsm
   ) where
 
-import RISK.Config
+import RISK.Spec
 import RISK.X86_64
 
--- | A RISK configuration example.
-exampleConfig :: Config
-exampleConfig = Config
+-- | An example RISK specification
+exampleSpec :: Spec
+exampleSpec = Spec
   { partitions =
     [ Partition { pName = "sensor_1",       pRate = Just 1000,  pMemory = 1024 }
     , Partition { pName = "sensor_2",       pRate = Just 1000,  pMemory = 1024 }

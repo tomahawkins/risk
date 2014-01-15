@@ -1,59 +1,34 @@
 -- | RISK configuration.
 module RISK.Config
-  ( Config             (..)
-  , Partition          (..)
-  , Channel            (..)
-  , ScheduleConstraint (..)
-  , Name
-  , graphviz
+  ( Config          (..)
+  , PartitionMemory (..)
+  , configure
   ) where
 
-import Text.Printf
+import RISK.Spec
 
--- | Partition names.
-type Name = String
+-- | Memory is a list of recv buffers, send buffers, and a general purpose memory region.
+data PartitionMemory = PartitionMemory
+  { recvBuffers :: [(Integer, Name)]  -- ^ A list of receiving buffers (size, corresponding channel name).
+  , sendBuffers :: [(Integer, Name)]  -- ^ A list of sending buffers (size, corresponding channel name).
+  , dataSize    :: Integer            -- ^ Size of general purpose memory region.
+  } deriving Show
 
--- | Overal kernel configuration.
+-- | Kernel configuration.
 data Config = Config
-  { partitions :: [Partition]              -- ^ The list of partitions.
-  , channels   :: [Channel]                -- ^ The partition communication channels (sender, receiver, buffer size).
-  , scheduling :: [ScheduleConstraint]     -- ^ Partition scheduling constraints.
-  }
+  { partitionMemory :: [(Name, PartitionMemory)]  -- ^ The memory layout of all the partitions.
+  } deriving Show
 
--- | Partition configuration.
-data Partition = Partition
-  { pName   :: Name         -- ^ The partition name.
-  , pRate   :: Maybe Double -- ^ Execution rate of partition in Hz.  If Nothing, thread runs in background.
-  , pMemory :: Integer      -- ^ The memory size allocated to the partition in bytes.
-  }
-
--- | Inter partition communication channel.
-data Channel = Channel
-  { cSender             :: Name       -- ^ Sending partition name.
-  , cSenderBufferSize   :: Integer    -- ^ Sending buffer size in bytes.
-  , cReceiver           :: Name       -- ^ Receiving partition name.
-  , cReceiverBufferSize :: Integer    -- ^ Receiving buffer size in bytes.
-  }
-
--- | Partition scheduling constraints.
-data ScheduleConstraint
-  -- | Execution priority between two partitions.  Overrides scheduling by channels if one exists.
-  = Before Name Name
-
--- | Generate a Graphviz diagram of a kernel configuration.
-graphviz :: Config -> String
-graphviz (Config partitions channels _) = unlines $
-  [ "digraph risk_config {"
-  , concat [ printf "  %s [label=\"%s\\n%s, %d bytes\"];\n" name name (rate r) size | Partition name r size <- partitions ]
-  , concatMap channel channels
-  , "}"
-  ]
+-- | Generate a configuration given a kernel specification.
+configure :: Spec -> Config
+configure spec' = Config [ (name, partitionMemory name size) | Partition name _ size  <- partitions spec ]
   where
-  rate :: Maybe Double -> String
-  rate a = case a of
-    Nothing -> "background"
-    Just a  -> printf "%f Hz" a
+  spec = validateSpec spec'
 
-  channel :: Channel -> String
-  channel (Channel s sSize r rSize) = printf "  %s -> %s [label=\"%d -> %d\"];\n" s r sSize rSize
+  -- A partitions' memory is receive and send buffers followed by general purpose memory.
+  partitionMemory :: Name -> Integer -> PartitionMemory
+  partitionMemory name size = PartitionMemory recvBuffers sendBuffers $ size - (sum $ fst $ unzip $ recvBuffers ++ sendBuffers)
+    where
+    recvBuffers = [ (cReceiverBufferSize c, cSender   c) | c <- channels spec, cReceiver c == name ]
+    sendBuffers = [ (cSenderBufferSize   c, cReceiver c) | c <- channels spec, cSender   c == name ]
 

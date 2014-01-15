@@ -18,13 +18,14 @@ cabal-version: >= 1.9.2
 library
   build-depends:
     base     >= 4.0,
-    monadLib >= 3.7.2
+    gigl     >= 0.0.0
   exposed-modules:
     RISK
     RISK.API
     RISK.Config
     RISK.Example
-    RISK.Language
+    RISK.Kernel
+    RISK.Spec
     RISK.X86_64
   ghc-options: -W
 
