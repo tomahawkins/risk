@@ -12,12 +12,17 @@ data PartitionMemory = PartitionMemory
   { recvBuffers :: [(Integer, Name)]  -- ^ A list of receiving buffers (size, corresponding channel name).
   , sendBuffers :: [(Integer, Name)]  -- ^ A list of sending buffers (size, corresponding channel name).
   , dataSize    :: Integer            -- ^ Size of general purpose memory region.
-  } deriving Show
+  }
 
 -- | Kernel configuration.
 data Config = Config
   { partitionMemory :: [(Name, PartitionMemory)]  -- ^ The memory layout of all the partitions.
-  } deriving Show
+  }
+
+instance Show Config where
+  show config = unlines $ map showP $ partitionMemory config
+    where
+    showP (name, PartitionMemory recv send size) = name ++ ":  " ++ show size ++ "  " ++ show recv ++ "  " ++ show send
 
 -- | Generate a configuration given a kernel specification.
 configure :: Spec -> Config

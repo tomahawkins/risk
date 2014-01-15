@@ -10,13 +10,13 @@ import RISK.Spec
 
 type RISK = GIGL (Config, KernelState)
 
-data KernelState = KernelState
-  { interrupt :: E Word64
-  }
-
 -- | Builds the kernel from the kernel specification.
 kernelProgram :: Spec -> Program
 kernelProgram spec = snd $ elaborate (configure spec, error "KernelState not defined.") kernel
+
+-- | Get the kernel configuration.
+kernelConfig :: RISK Config
+kernelConfig = getMeta >>= return . fst
 
 -- | The kernel
 kernel :: RISK ()
@@ -24,23 +24,31 @@ kernel = do
   declareKernelState
   declareKernelInit
   declareKernelEntry
-  declareNextThread
+  declareRunNextPartition
 
--- | Build up the kernel state variable and put it into the RISK monad.
+-- | All the kernel state variables.
+data KernelState = KernelState
+  { interruptSource' :: E Word64
+  , activePartition' :: E Word64
+  }
+
+-- | Build up the kernel state (global) variables and put it into the RISK monad.
 declareKernelState :: RISK ()
 declareKernelState = do
   config <- kernelConfig
   setMeta (config, KernelState
-    { interrupt = undefined
+    { interruptSource' = undefined
+    , activePartition' = undefined
     })
 
--- | Get the kernel configuration.
-kernelConfig :: RISK Config
-kernelConfig = getMeta >>= return . fst
+-- | Get a kernel state field.
+kernelState :: (KernelState -> a) -> RISK a
+kernelState f = getMeta >>= return . f . snd
 
--- | Get the kernel state.
-kernelState :: RISK KernelState
-kernelState = getMeta >>= return . snd
+-- Various kernal state getters.
+interruptSource = kernelState interruptSource'
+activePartition = kernelState activePartition'
+
 
 -- | Kernel initialization.
 declareKernelInit :: RISK ()
@@ -51,10 +59,10 @@ declareKernelInit = function "kernelInit" $ do
 declareKernelEntry :: RISK ()
 declareKernelEntry = function "kernelEntry" $ do
   saveContext
-  s <- kernelState
-  case' (interrupt s)
-    [ (yield, transferMessages >> goto "nextThread")
-    , (timer,                     goto "nextThread")
+  i <- interruptSource
+  case' i
+    [ (yield, transferMessages >> runNextPartition)
+    , (timer,                     runNextPartition)
     , (io,        undefined)
     , (pageFault, undefined)
     , (exception, undefined)
@@ -66,16 +74,19 @@ declareKernelEntry = function "kernelEntry" $ do
   pageFault = undefined
   exception = undefined
 
--- | Saves the current contents to tmp.
+-- | Saves the current context to tmp.
 saveContext :: RISK ()
 saveContext = undefined
 
--- | Transfer messages from current thread.
+-- | Transfer messages from current partition to recipients.
 transferMessages :: RISK ()
 transferMessages = undefined
 
--- | Runs the next thread in the schedule.
-declareNextThread :: RISK ()
-declareNextThread = function "nextThread" $ do
+-- | Runs the next partition in the schedule.
+declareRunNextPartition :: RISK ()
+declareRunNextPartition = function "runNextPartition" $ do
   undefined
+
+runNextPartition :: RISK ()
+runNextPartition = goto "runNextPartition"
 
