@@ -48,6 +48,7 @@ validateSpec = id --XXX
   -- All buffer and memory sizes greater than 0.
   -- Partition memory size can hold all channel buffers.
   -- Q: Should loopback channels be allowed?
+  -- Receive buffer sizes are power of 2.  (For quick circular buffer pointer calculations.)
 
 -- | Generate a Graphviz diagram of a kernel specification.
 graphviz :: Spec -> String
