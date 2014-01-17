@@ -1,3 +1,4 @@
+-- | Kernel verification.
 module RISK.Verify
   ( verifyKernel
   ) where
@@ -12,14 +13,14 @@ import RISK.Config
 import RISK.Kernel
 import RISK.Spec
 
-type Verify = StateT [(String, IO Bool)] Id
-
+-- | Verifies properties of the kernel.
 verifyKernel :: Spec -> IO ()
 verifyKernel spec = runVerification $ do
   verify "termination" $ termination program
   where
-  config  = configure spec
   program = validateProgram $ kernelProgram spec
+
+type Verify = StateT [(String, IO Bool)] Id
 
 verify :: String -> IO Bool -> Verify ()
 verify name f = get >>= set . (++ [(name, f)])
@@ -41,7 +42,7 @@ runVerification suite = do
 
 validateProgram :: Program Intrinsic -> Program Intrinsic
 validateProgram = id
-{-
+{- XXX
   - All labels unique.
   - All variables unique.
   - All goto label references valid.
@@ -49,7 +50,7 @@ validateProgram = id
   - All assignments are valid: var or array index LHS.
 -}
 
--- All entry points (labels) will terminate at RunNextPartition.
+-- All kernel entry points (labels) will terminate and return control to a user partition (RunNextPartition).
 termination :: Program Intrinsic -> IO Bool
 termination (Program _ stmt) = do
   when (not loopFree) $ do
