@@ -4,10 +4,10 @@ import RISK
 
 main :: IO ()
 main = do
-  putStrLn  "Generating example assembly program (hello.s)..."
+  putStrLn  "Generating example assembly program (hello.s) ..."
   writeFile "hello.s" $ codeGen exampleAsm
 
-  putStrLn  "Writing graphviz diagram of kernel specification (test.dot)..."
+  putStrLn  "Writing graphviz diagram of kernel specification (test.dot) ..."
   writeFile "test.dot" $ graphviz exampleSpec
 
   putStrLn  "Kernel configuration from example specification:"
@@ -15,4 +15,7 @@ main = do
 
   putStrLn  "Kernel program of example configuration:"
   print     $ kernelProgram exampleSpec
+
+  putStrLn  "Verifying kernel ..."
+  verifyKernel exampleSpec
 

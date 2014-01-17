@@ -18,11 +18,15 @@ data Intrinsic
   | PartitionExceptionHandler
   | SaveContext
   | RunNextPartition
+  | InvalidExecution  -- ^ Marks the begining and end of code segements.  Used to check if execution goes off a cliff.
   deriving Show
 
 -- | Builds the kernel from the kernel specification.
 kernelProgram :: Spec -> Program Intrinsic
-kernelProgram spec = snd $ elaborate (configure spec, error "KernelState not defined.") kernel
+kernelProgram spec = snd $ elaborate (configure spec, error "KernelState not defined.") $ invalidExecution >> kernel >> invalidExecution
+
+invalidExecution :: RISK ()
+invalidExecution = intrinsic InvalidExecution
 
 -- Get the kernel configuration.
 config :: RISK Config
@@ -35,6 +39,13 @@ kernel = do
   declareKernelInit
   declareKernelEntry
   declareRunNextPartition
+
+-- Declares a code segement.
+block :: String -> RISK () -> RISK ()
+block name code = do
+  invalidExecution
+  label name code
+  invalidExecution
 
 -- All the kernel state variables.
 data KernelState = KernelState
@@ -63,20 +74,22 @@ activePartition = kernelState activePartition'
 
 -- Kernel initialization.
 declareKernelInit :: RISK ()
-declareKernelInit = label "kernelInit" $ do
+declareKernelInit = block "kernelInit" $ do
   intrinsic KernelInit
+  runNextPartition
 
 -- Main kernel entry due to interrupt (timer, yield call, exception, etc).
 declareKernelEntry :: RISK ()
-declareKernelEntry = label "kernelEntry" $ do
+declareKernelEntry = block "kernelEntry" $ do
   saveContext
   i <- interruptSource
   case' i
-    [ (yield,     transferMessages >> runNextPartition)
-    , (timer,                         runNextPartition)
+    [ (yield,     transferMessages)
+    , (timer,     return ())
     , (io,        intrinsic IOInterruptHandler)
     , (exception, intrinsic PartitionExceptionHandler)
     ]
+  runNextPartition
   where
   yield     = (.== Const 1)
   timer     = (.== Const 2)
@@ -118,7 +131,7 @@ onActivePartition k = do
 
 -- Runs the next partition in the schedule.
 declareRunNextPartition :: RISK ()
-declareRunNextPartition = label "runNextPartition" $ do
+declareRunNextPartition = block "runNextPartition" $ do
   intrinsic RunNextPartition
 
 -- Runs the next partition in the schedule.
