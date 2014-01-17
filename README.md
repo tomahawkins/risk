@@ -1,14 +1,32 @@
-# RISK: a Realtime Information flow control Separation Kernel
+# RISK: a Realtime Information-flow-control Separation Kernel
 
-# Goals of RISK
+The goals of RISK are to produce a compile-time configurable 
+separation kernel, simple enough to be verified automatically.
+Partitions communicate via. message passing over unidirectional,
+verifiable information flow control (IFC) channels.
+And for realtime partitions, an attempt will be made
+to minimize covert timing channels.
 
-- A simple, easily verifiable separation kernel.
-  - It appears seL4 verification is hard to manage across revisions of the OS.
-  - Can we make a kernel simple enough for nearly fully automated verification?
-- Minimize timing channels, at least between realtime partitions.
-- Provide basic IFC mechanisms, e.g. unidirectional IPC information channels.
+# RISK Status
 
-# Ideas
+## Implementation
+
+- The [partition specification](https://github.com/tomahawkins/risk/blob/master/RISK/Spec.hs)
+  and the [kernel configuration](https://github.com/tomahawkins/risk/blob/master/RISK/Config.hs) modules are defined.
+- The syntax of the implementation DSL, [GIGL](https://github.com/tomahawkins/gigl), is operational.
+  - Currently GIGL has no simulator or backend implementation targets. 
+- An abstract [kernel](https://github.com/tomahawkins/risk/blob/master/RISK/Kernel.hs) is implemented,
+  with many high level operations (e.g. scheduling, interrupt handlers, IPC, etc.) stubbed off as intrinsics.
+
+## Verification
+
+- Successfully verified properties of the kernel:
+  - Type Safety: Absense of runtime errors verified by [GIGL's use of Haskell types](https://github.com/tomahawkins/gigl/blob/master/Language/GIGL.hs).
+  - [Termination](https://github.com/tomahawkins/risk/blob/master/RISK/Verify.hs): The kernel will always yield to a user partition,
+    verified by code reachability analysis.
+- GIGL can target [ACL2](http://www.cs.utexas.edu/~moore/acl2/), though ACL2 is not currently used for verification.
+
+# Random Ideas
 
 - A language to specify the partitions, their execution rates, and the communication channels between them.
   - Partitions form a digraph.  Edges are message passing.
