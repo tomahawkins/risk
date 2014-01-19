@@ -51,6 +51,7 @@ block name code = do
 data KernelState = KernelState
   { interruptSource' :: E Word64
   , activePartition' :: E Word64
+  , schedulingPhase' :: E Word64
   }
 
 -- Build up the kernel state (global) variables and put it into the RISK monad.
@@ -59,9 +60,11 @@ declareKernelState = do
   config <- config
   interruptSource <- var "interruptSource" Nothing
   activePartition <- var "activePartition" Nothing
+  schedulingPhase <- var "schedulingPhase" Nothing
   setMeta (config, KernelState
     { interruptSource' = interruptSource
     , activePartition' = activePartition
+    , schedulingPhase' = schedulingPhase
     })
 
 -- Get a kernel state field.
@@ -71,6 +74,7 @@ kernelState f = getMeta >>= return . f . snd
 -- Various kernal state getters.
 interruptSource = kernelState interruptSource'
 activePartition = kernelState activePartition'
+schedulingPhase = kernelState schedulingPhase'
 
 -- Kernel initialization.
 declareKernelInit :: RISK ()
@@ -88,7 +92,7 @@ declareKernelEntry = block "kernelEntry" $ do
     , (timer,     return ())
     , (io,        intrinsic IOInterruptHandler)
     , (exception, intrinsic PartitionExceptionHandler)
-    ]
+    ] Nothing
   runNextPartition
   where
   yield     = (.== Const 1)
@@ -102,8 +106,7 @@ saveContext = intrinsic SaveContext
 
 -- Transfer messages from current partition to recipients.
 transferMessages :: RISK ()
-transferMessages = onActivePartition $ \ i -> do
-  intrinsic $ TransferMessages i
+transferMessages = onActivePartition $ intrinsic . TransferMessages
 {-
   foreach sendBuffer
     sendPtr = sendBufferPtr
@@ -124,17 +127,28 @@ onActivePartition :: (Int -> RISK ()) -> RISK ()
 onActivePartition k = do
   config <- config
   p <- activePartition
-  let total = length $ partitionMemory config
-      f :: Int -> RISK ()
-      f i = if i == total - 1 then k i else if' (p .== Const (fromIntegral i)) (k i) (f $ i + 1)
+  let f :: Int -> RISK ()
+      f i = if i == totalPartitions config - 1 then k i else if' (p .== Const (fromIntegral i)) (k i) (f $ i + 1)
   f 0
-
--- Runs the next partition in the schedule.
-declareRunNextPartition :: RISK ()
-declareRunNextPartition = block "runNextPartition" $ do
-  intrinsic RunNextPartition
 
 -- Runs the next partition in the schedule.
 runNextPartition :: RISK ()
 runNextPartition = goto "runNextPartition"
+
+-- Runs the next partition in the schedule.
+declareRunNextPartition :: RISK ()
+declareRunNextPartition = block "runNextPartition" $ do
+  scheduleNextPartition
+  intrinsic RunNextPartition
+
+-- Schedules the next partition by updating schedulingPhase and activePartition.
+scheduleNextPartition :: RISK ()
+scheduleNextPartition = do
+  config <- config
+  let phases :: [(Word64, Word64)]  -- Maps schedule phase to parition id.
+      phases = zip [0 ..] $ map (fromIntegral . partitionId config) $ schedule config
+  schedulingPhase <- schedulingPhase
+  activePartition <- activePartition
+  schedulingPhase <== mux (schedulingPhase .== Const (fromIntegral $ length phases - 1)) (Const 0) (Add schedulingPhase $ Const 1)
+  activePartition <== mux' [ (schedulingPhase .== Const phase, Const partition) | (phase, partition) <- phases ] $ Const 0
 

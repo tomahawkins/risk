@@ -16,7 +16,8 @@ to minimize covert timing channels.
 - The syntax of the implementation DSL, [GIGL](https://github.com/tomahawkins/gigl), is operational.
   - Currently GIGL has no simulator or backend implementation targets. 
 - An abstract [kernel](https://github.com/tomahawkins/risk/blob/master/RISK/Kernel.hs) is implemented,
-  with many high level operations (e.g. scheduling, interrupt handlers, IPC, etc.) stubbed off as intrinsics.
+  with many high level operations (e.g. interrupt handlers, IPC, etc.) stubbed off as intrinsics.
+- A round-robin scheduler is implemented.
 
 ## Verification
 
@@ -40,7 +41,7 @@ to minimize covert timing channels.
   - Correctness:
     - All kernel API calls terminate and return to the user level.
     - Kernel can never enter an infinite loop.
-    - Kernel can never crash or throw and exception.
+    - Kernel can never crash or throw an exception.
     - Scheduling is correct.
   - IFC:
     - Any two partitions exhibit noninterference if they have no mutual communication channels.

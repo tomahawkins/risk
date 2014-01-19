@@ -3,7 +3,13 @@ module RISK.Config
   ( Config          (..)
   , PartitionMemory (..)
   , configure
+  , partitionId
+  , partitionNames
+  , totalPartitions
   ) where
+
+import Data.Maybe (fromJust)
+import Data.List  (elemIndex)
 
 import RISK.Spec
 
@@ -17,6 +23,7 @@ data PartitionMemory = PartitionMemory
 -- | Kernel configuration.
 data Config = Config
   { partitionMemory :: [(Name, PartitionMemory)]  -- ^ The memory layout of all the partitions.
+  , schedule        :: [Name]                     -- ^ Roundrobin schedule of partitions.
   }
 
 instance Show Config where
@@ -26,7 +33,10 @@ instance Show Config where
 
 -- | Generate a configuration given a kernel specification.
 configure :: Spec -> Config
-configure spec' = Config [ (name, partitionMemory name size) | Partition name _ size  <- partitions spec ]
+configure spec' = Config
+  { partitionMemory = [ (name, partitionMemory name size) | Partition name _ size  <- partitions spec ]
+  , schedule        = [ name | Partition name _ _ <- partitions spec ]
+  }
   where
   spec = validateSpec spec'
 
@@ -36,4 +46,16 @@ configure spec' = Config [ (name, partitionMemory name size) | Partition name _ 
     where
     recvBuffers = [ (cReceiverBufferSize c, cSender   c) | c <- channels spec, cReceiver c == name ]
     sendBuffers = [ (cSenderBufferSize   c, cReceiver c) | c <- channels spec, cSender   c == name ]
+
+-- | Partition names.
+partitionNames :: Config -> [Name]
+partitionNames = fst .unzip . partitionMemory
+
+-- | Total number of partitions.
+totalPartitions :: Config -> Int
+totalPartitions = length . partitionNames
+
+-- | Partition id.
+partitionId :: Config -> Name -> Int
+partitionId config name = fromJust $ elemIndex name $ partitionNames config
 

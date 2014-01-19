@@ -1,4 +1,4 @@
--- | The Realtime Ifc Separation Kernal (RISK) library.
+-- | RISK: The Realtime Ifc Separation Kernal.
 module RISK
   ( module RISK.Config
   , module RISK.Example

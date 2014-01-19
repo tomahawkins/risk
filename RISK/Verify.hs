@@ -16,9 +16,13 @@ import RISK.Spec
 -- | Verifies properties of the kernel.
 verifyKernel :: Spec -> IO ()
 verifyKernel spec = runVerification $ do
-  verify "termination" $ termination program
+  verify "termination"              $ termination                              program
+  verify "scheduling phase updates" $ schedulingPhaseUpdates (schedule config) program
+  verify "partition scheduling"     $ partitionScheduling    (schedule config) program
   where
-  program = validateProgram $ kernelProgram spec
+  config   = configure spec
+  sched    = schedule config
+  program  = validateProgram $ kernelProgram spec
 
 type Verify = StateT [(String, IO Bool)] Id
 
@@ -105,4 +109,12 @@ termination (Program _ stmt) = do
     Intrinsic RunNextPartition -> ([], sofar, invalidTerm)
     Intrinsic InvalidExecution -> ([], sofar, from ++ invalidTerm)
     Intrinsic _ -> i
+
+-- Verifies that the schedulingPhase variable is updated correctly.
+schedulingPhaseUpdates :: [Name] -> Program Intrinsic -> IO Bool
+schedulingPhaseUpdates _ _ = return False
+
+-- Verifies that the correct activePartition corresponds with the schedulingPhase.
+partitionScheduling :: [Name] -> Program Intrinsic -> IO Bool
+partitionScheduling _ _ = return False
 
