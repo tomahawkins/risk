@@ -19,4 +19,5 @@ clean:
 	-rm test.png
 	-rm hello
 	-rm hello.s
+	-rm risk_partition_*
 

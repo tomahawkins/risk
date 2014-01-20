@@ -42,7 +42,7 @@ configure spec' = Config
 
   -- A partitions' memory is receive and send buffers followed by general purpose memory.
   partitionMemory :: Name -> Integer -> PartitionMemory
-  partitionMemory name size = PartitionMemory recvBuffers sendBuffers $ size - (sum $ fst $ unzip $ recvBuffers ++ sendBuffers)
+  partitionMemory name size = PartitionMemory recvBuffers sendBuffers $ size - (fromIntegral (length recvBuffers) + (sum $ fst $ unzip $ recvBuffers ++ sendBuffers))
     where
     recvBuffers = [ (cReceiverBufferSize c, cSender   c) | c <- channels spec, cReceiver c == name ]
     sendBuffers = [ (cSenderBufferSize   c, cReceiver c) | c <- channels spec, cSender   c == name ]
