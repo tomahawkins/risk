@@ -18,6 +18,11 @@ to minimize covert timing channels.
 - An abstract [kernel](https://github.com/tomahawkins/risk/blob/master/RISK/Kernel.hs) is implemented,
   with many high level operations (e.g. interrupt handlers, IPC, etc.) stubbed off as intrinsics.
 - A round-robin scheduler is implemented.
+- A kernel simulator is running in C with the provided flight control [example](https://github.com/tomahawkins/risk/blob/master/paritions.c).
+  Limitations:
+  - Supports non-preemptive partitions only, i.e. partitions must called yield.
+  - Currently lacks IPC.
+  - Memory partitions are not enforced.
 
 ## Verification
 
@@ -25,7 +30,7 @@ to minimize covert timing channels.
   - Type Safety: Absense of runtime errors verified by [GIGL's use of Haskell types](https://github.com/tomahawkins/gigl/blob/master/Language/GIGL.hs).
   - [Termination](https://github.com/tomahawkins/risk/blob/master/RISK/Verify.hs): The kernel will always yield to a user partition,
     verified by code reachability analysis.
-- GIGL can target [ACL2](http://www.cs.utexas.edu/~moore/acl2/), though ACL2 is not currently used for verification.
+- GIGL can target [ACL2](http://www.cs.utexas.edu/~moore/acl2/), though ACL2 is not currently used in verification.
 
 # Random Ideas
 

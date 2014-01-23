@@ -28,6 +28,9 @@ headerFile :: Name -> PartitionMemory -> String
 headerFile name memory = unlines
   [ printf "// RISK Partition %s" name
   , printf ""
+  , printf "// The main entry point for the partition."
+  , printf "void %s_main(void);" name
+  , printf ""
   , printf "// Yield control back to kernel."
   , printf "void risk_yield(void);"
   , printf ""

@@ -11,7 +11,7 @@ import RISK.Spec
 
 generateSimulator :: Spec -> IO ()
 generateSimulator spec = writeFile "risk_sim.c" $ unlines
-  [ printf "// RISK Kernel Simulator"
+  [ printf "// RISK Simulator"
   , printf ""
   , printf "#include <stdlib.h>"
   , printf "#include <stdio.h>"
