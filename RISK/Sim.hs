@@ -13,6 +13,7 @@ generateSimulator :: Spec -> IO ()
 generateSimulator spec = writeFile "risk_sim.c" $ unlines
   [ printf "// RISK Kernel Simulator"
   , printf ""
+  , printf "#include <stdlib.h>"
   , printf "#include <stdio.h>"
   , printf ""
   , printf "// Partition entry points."
@@ -55,10 +56,7 @@ generateSimulator spec = writeFile "risk_sim.c" $ unlines
   , printf "static void risk_run_partition(int partition, unsigned char * partition_initialized, void * partition_sp, void (* partition_main)(void))"
   , printf "{"
   , indent $ unlines
-    [ printf "printf(\"risk_run_partition: %%d\\n\", partition);"
-    , printf "fflush(stdout);"
-    , printf ""
-    , printf "// Set the active partition."
+    [ printf "// Set the active partition."
     , printf "risk_active_partition = partition;"
     , printf ""
     , printf "// Save the return address on the kernel stack (for a ret in the yield function)."
@@ -86,15 +84,18 @@ generateSimulator spec = writeFile "risk_sim.c" $ unlines
   , printf "}"
   , printf ""
   , printf "// Kernel main entry point."
-  , printf "int main (void)"
+  , printf "int main (int argc, char **argv)"
   , printf "{"
   , indent $ unlines
-    [ printf "// Partition initalization flags."
+    [ printf "// Total schedule cycles to run."
+    , printf "int cycles = atoi(argv[1]);"
+    , printf ""
+    , printf "// Partition initalization flags."
     , unlines [ printf "unsigned char %s_initialized = 0;" name | name <- partitionNames config ]
     , printf "// Initialize partition stack pointers."
     , unlines [ printf "%s_sp = %s_memory + %d;" name name $ partitionMemorySize config name | name <- partitionNames config ]
     , printf "// Run the partition scheduler."
-    , printf "for (;;) {"
+    , printf "for (; cycles > 0; cycles--) {"
     , indent $ unlines [ printf "risk_run_partition(%d, & %s_initialized, %s_sp, %s_main);" (partitionId config name) name name name | name <- schedule config ]
     , printf "}"
     , printf "return 0;"

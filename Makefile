@@ -1,20 +1,22 @@
 .PHONY: all
-all: test.dot hello risk_sim.s
-	./hello
+all: risk_sim risk_sim.s example.png
+	risk_sim 10
 
-.PHONY: run
-run: risk_sim risk_sim.s
-	risk_sim
+#.PHONY: all
+#all: test.dot hello risk_sim.s
+#	./hello
+#
+#hello: hello.s
+#	gcc -o hello hello.s
 
 dist/setup-config: RISK.hs RISK/*.hs
 	cabal install
 
-test.dot hello.s risk_sim.c: Test.hs dist/setup-config
-	runhaskell -W Test.hs
-	dot -Tpng -otest.png test.dot
+example.dot risk_sim.c: Example.hs dist/setup-config
+	runhaskell -W Example.hs
 
-hello: hello.s
-	gcc -o hello hello.s
+example.png: example.dot
+	dot -Tpng -oexample.png example.dot
 
 risk_sim: risk_sim.c partitions.c
 	gcc -Wall -o risk_sim *.c
@@ -25,10 +27,8 @@ risk_sim.s: risk_sim
 .PHONY: clean
 clean:
 	cabal clean
-	-rm test.dot
-	-rm test.png
-	-rm hello
-	-rm hello.s
+	-rm example.dot
+	-rm example.png
 	-rm risk_api_*
 	-rm risk_sim
 	-rm risk_sim.c

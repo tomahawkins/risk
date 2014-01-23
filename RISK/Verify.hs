@@ -21,7 +21,7 @@ verifyKernel spec = runVerification $ do
   verify "partition scheduling"     $ partitionScheduling    (schedule config) program
   where
   config   = configure spec
-  sched    = schedule config
+  --sched    = schedule config
   program  = validateProgram $ kernelProgram spec
 
 type Verify = StateT [(String, IO Bool)] Id
