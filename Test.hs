@@ -19,6 +19,9 @@ main = do
   putStrLn  "Generating API files for example configuration ..."
   generateAPI exampleSpec
 
+  putStrLn  "Generating kernel simulator ..."
+  generateSimulator exampleSpec
+
   putStrLn  "Verifying kernel ..."
   verifyKernel exampleSpec
 

@@ -26,6 +26,7 @@ library
     RISK.Config
     RISK.Example
     RISK.Kernel
+    RISK.Sim
     RISK.Spec
     RISK.Verify
     RISK.X86_64

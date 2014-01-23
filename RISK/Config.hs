@@ -6,6 +6,7 @@ module RISK.Config
   , partitionId
   , partitionNames
   , totalPartitions
+  , partitionMemorySize
   ) where
 
 import Data.Maybe (fromJust)
@@ -50,6 +51,16 @@ configure spec' = Config
 -- | Partition names.
 partitionNames :: Config -> [Name]
 partitionNames = fst .unzip . partitionMemory
+
+-- Partition memory size in bytes.
+partitionMemorySize :: Config -> Name -> Integer
+partitionMemorySize config name = case a of
+  [] -> error $ "No partition named: " ++ name
+  [a] -> a
+  _ -> error $ "Multiple partitions named: " ++ name
+  where
+  a = [ fromIntegral (length recv) + sum (fst $ unzip $ recv ++ send) + dat | (name', PartitionMemory recv send dat) <- partitionMemory config, name == name' ]
+  
 
 -- | Total number of partitions.
 totalPartitions :: Config -> Int
