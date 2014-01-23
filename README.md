@@ -18,7 +18,7 @@ to minimize covert timing channels.
 - An abstract [kernel](https://github.com/tomahawkins/risk/blob/master/RISK/Kernel.hs) is implemented,
   with many high level operations (e.g. interrupt handlers, IPC, etc.) stubbed off as intrinsics.
 - A round-robin scheduler is implemented.
-- A kernel simulator is running in C with the provided flight control [example](https://github.com/tomahawkins/risk/blob/master/paritions.c).
+- A kernel simulator is running in C with the provided flight control [example](https://github.com/tomahawkins/risk/blob/master/partitions.c).
   Limitations:
   - Supports non-preemptive partitions only, i.e. partitions must called yield.
   - Currently lacks IPC.
