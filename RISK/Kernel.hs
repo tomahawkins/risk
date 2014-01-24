@@ -1,3 +1,4 @@
+{-# LANGUAGE TupleSections #-}
 module RISK.Kernel
   ( Intrinsic (..)
   , kernelProgram
@@ -13,7 +14,6 @@ type RISK = GIGL (Config, KernelState) Intrinsic
 
 data Intrinsic
   = TransferMessages Int  -- ^ Transfer messages from a partition.
-  | KernelInit
   | IOInterruptHandler
   | PartitionExceptionHandler
   | SaveContext
@@ -38,7 +38,6 @@ kernel = do
   declareKernelState
   declareKernelInit
   declareKernelEntry
-  declareRunNextPartition
 
 -- Declares a code segement.
 block :: String -> RISK () -> RISK ()
@@ -49,23 +48,38 @@ block name code = do
 
 -- All the kernel state variables.
 data KernelState = KernelState
-  { interruptSource' :: E Word64
-  , activePartition' :: E Word64
-  , schedulingPhase' :: E Word64
+  { interruptSource'    :: E Word64
+  , activePartition'    :: E Word64
+  , schedulingPhase'    :: E Word64
+  , partitionInits'     :: [(Name, E Bool)]
+  , partitionStackPtrs' :: [(Name, E Word64)]
   }
 
 -- Build up the kernel state (global) variables and put it into the RISK monad.
 declareKernelState :: RISK ()
 declareKernelState = do
   config <- config
-  interruptSource <- var "interruptSource" Nothing
-  activePartition <- var "activePartition" Nothing
-  schedulingPhase <- var "schedulingPhase" Nothing
+  interruptSource    <- word64 "risk_interrupt_source"
+  activePartition    <- word64 "risk_active_partition"
+  schedulingPhase    <- word64 "risk_scheduling_phase"
+  partitionInits     <- sequence [ bool (name ++ "_initialized") >>= return . (name,) | name <- partitionNames config ] 
+  partitionStackPtrs <- sequence [ word64 (name ++ "_sp") >>= return . (name,) | name <- partitionNames config ] 
+  sequence_ [ word64 (name ++ "_data") | name <- partitionNames config ]
+  sequence_ $ concat
+    [ [ word64 (name ++ "_from_" ++ from ++ "_head_index")  | (_, from) <- recv ] ++
+      [ word64 (name ++ "_from_" ++ from ++ "_tail_index")  | (_, from) <- recv ] ++
+      [ word64 (name ++ "_from_" ++ from ++ "_recv_buffer") | (_, from) <- recv ] ++
+      [ word64 (name ++ "_to_"   ++ to   ++ "_send_buffer") | (_, to)   <- send ]
+    | (name, PartitionMemory recv send _) <- partitionMemory config
+    ]
   setMeta (config, KernelState
-    { interruptSource' = interruptSource
-    , activePartition' = activePartition
-    , schedulingPhase' = schedulingPhase
+    { interruptSource'    = interruptSource
+    , activePartition'    = activePartition
+    , schedulingPhase'    = schedulingPhase
+    , partitionInits'     = partitionInits
+    , partitionStackPtrs' = partitionStackPtrs
     })
+
 
 -- Get a kernel state field.
 kernelState :: (KernelState -> a) -> RISK a
@@ -76,15 +90,28 @@ interruptSource = kernelState interruptSource'
 activePartition = kernelState activePartition'
 schedulingPhase = kernelState schedulingPhase'
 
+comment :: String -> RISK ()
+comment _ = return ()
+
 -- Kernel initialization.
 declareKernelInit :: RISK ()
-declareKernelInit = block "kernelInit" $ do
-  intrinsic KernelInit
-  runNextPartition
+declareKernelInit = block "risk_init" $ do
+  comment "Initialize the active parition."
+  activePartition <- activePartition
+  activePartition <== Const 0xffffffffffffffff
+  comment "Initialize the scheduling phase."
+  schedulingPhase <- schedulingPhase
+  config <- config
+  schedulingPhase <== Const (fromIntegral $ length (schedule config) - 1)
+  comment "XXX Initialize the partition init flags."
+  comment "XXX Initialize the partition stack pointers."
+  comment "XXX Initialize the partition channel buffer and data region pointers."
+  comment "Jump into the kernel."
+  goto "risk_entry"
 
 -- Main kernel entry due to interrupt (timer, yield call, exception, etc).
 declareKernelEntry :: RISK ()
-declareKernelEntry = block "kernelEntry" $ do
+declareKernelEntry = block "risk_entry" $ do
   saveContext
   i <- interruptSource
   case' i
@@ -133,11 +160,7 @@ onActivePartition k = do
 
 -- Runs the next partition in the schedule.
 runNextPartition :: RISK ()
-runNextPartition = goto "runNextPartition"
-
--- Runs the next partition in the schedule.
-declareRunNextPartition :: RISK ()
-declareRunNextPartition = block "runNextPartition" $ do
+runNextPartition = do
   scheduleNextPartition
   intrinsic RunNextPartition
 
