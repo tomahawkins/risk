@@ -5,7 +5,7 @@ module RISK.Sim
 
 import Text.Printf
 
-import RISK.API (byte)
+import RISK.API (byte, word)
 import RISK.Config
 import RISK.Spec
 
@@ -18,87 +18,132 @@ generateSimulator spec = writeFile "risk_sim.c" $ unlines
   , printf ""
   , printf "// Partition entry points."
   , unlines [ printf "void %s_main (void);" name | name <- partitionNames config ]
+  , printf "// Parition initialization flags."
+  , unlines [ printf "static unsigned char %s_initialized;" name | name <- partitionNames config ]
   , printf "// Partition memories (recv buffers + send buffers + data space)."
   , unlines [ printf "static %s %s_memory[%d];" byte name $ partitionMemorySize config name | name <- partitionNames config ]
+  , printf "// Partition channel buffers and data memory."
+  , unlines $ concatMap partitionBuffers $ partitionMemory config
   , printf "// Partition stack pointers."
   , unlines [ printf "static void * %s_sp;" name | name <- partitionNames config ]
-  , printf "// Kernel stack pointer."
-  , printf "static void * risk_sp;"
-  , printf ""
   , printf "// Active partition."
-  , printf "static int risk_active_partition;"
+  , printf "static %s risk_active_partition;" word
   , printf ""
-  , printf "// Partition yields control back to the kernel."
-  , printf "void risk_yield (void)"
+  , printf "// Current scheduling phase."
+  , printf "static %s risk_scheduling_phase;" word
+  , printf ""
+  , printf "// Scheduling cycle count."
+  , printf "static int risk_cycle_count;"
+  , printf ""
+  , printf "// Kernel initialization."
+  , printf "void risk_init (void)"
+  , printf "{"
+  , indent $ unlines
+    [ printf "// Initialize active partition and scheduling phase."
+    , printf "risk_active_partition = 0xffffffffffffffff;"
+    , printf "risk_scheduling_phase = %d;" $ length (schedule config) - 1
+    , printf ""
+    , printf "// Initialize partition init flags."
+    , unlines [ printf "%s_initialized = 0;" name | name <- partitionNames config ]
+    , printf "// Initialize partition stack pointers."
+    , unlines [ printf "%s_sp = %s_memory + %d;" name name $ partitionMemorySize config name | name <- partitionNames config ]
+    ]
+  , printf "}"
+  , printf ""
+  , printf "// Kernel entry point."
+  , printf "void risk_entry (void)"
   , printf "{"
   , indent $ unlines
     --XXX Why does this cause a Bus error: 10?
     --[ printf "printf(\"risk_yield: %%d\\n\", risk_active_partition);"
     --, printf "fflush(stdout);"
     --, printf ""
-    [ printf "// Save the partition's stack pointer."
+    [ printf "if (risk_cycle_count-- == 0) {"
+    , printf "\texit(0);"
+    , printf "}"
+    , printf ""
+    , printf "// Save the active partition's stack pointer."
     , printf "switch (risk_active_partition) {"
     , indent $ unlines [ printf "case %-3d : asm(\"movq %%%%rsp, %%0\" : \"=r\" (%s_sp) : ); break;" (partitionId config name) name | name <- partitionNames config ]
     , printf "}"
     , printf ""
-    , printf "// Restore the kernel's stack pointer."
-    , printf "asm(\"movq %%0, %%%%rsp\" : : \"r\" (risk_sp));"
-    , printf ""
-    , printf "// Return from previous call to risk_run_partition."
-    , printf "asm(\"addq $0x20,%%rsp\");"
-    , printf "asm(\"popq %%rbp\");"
-    , printf "asm(\"ret\");"
-    , printf "asm(\"return_risk_yield:\");"
+    , printf "// Run the next partition."
+    , printf "switch (risk_scheduling_phase) {"
+    , indent $ unlines $ map scheduleCase sched
+    , printf "}"
+    , printf "asm(\"return_risk_entry:\");"
     ]
   , printf "}"
   , printf ""
-  , printf "// Runs the next partition in the schedule."
-  , printf "static void risk_run_partition(int partition, unsigned char * partition_initialized, void * partition_sp, void (* partition_main)(void))"
+  , printf "// Partition yields control back to the kernel."
+  , printf "void risk_yield (void)"
   , printf "{"
-  , indent $ unlines
-    [ printf "// Set the active partition."
-    , printf "risk_active_partition = partition;"
-    , printf ""
-    , printf "// Save the kernel's stack pointer."
-    , printf "asm(\"movq %%%%rsp, %%0\" : \"=r\" (risk_sp) : );"
-    , printf ""
-    , printf "// Load the partition's stack pointer."
-    , printf "asm(\"movq %%0, %%%%rsp\" : : \"r\" (partition_sp));"
-    , printf ""
-    , printf "if (* partition_initialized) {" 
-    , printf "\t// If partition is already running, return from its previous call to risk_yield."
-    --, printf "\tasm(\"addq $0x10,%%rsp\");"
-    , printf "\tasm(\"popq %%rbp\");"
-    , printf "\tasm(\"ret\");"
-    , printf "}"
-    , printf "else {"
-    , printf "\t// Else, initialize the partition by calling the partition's main entry point."
-    , printf "\t* partition_initialized = 1;"
-    , printf "\tpartition_main();"
-    , printf "}"
-    , printf "asm(\"return_risk_run_partition:\");"
-    ]
+  , printf "\trisk_entry();"
   , printf "}"
   , printf ""
-  , printf "// Kernel main entry point."
+  , printf "// Kernel's main."
   , printf "int main (int argc, char **argv)"
   , printf "{"
-  , indent $ unlines
-    [ printf "// Total schedule cycles to run."
-    , printf "int cycles;"
-    , printf ""
-    , printf "// Partition initalization flags."
-    , unlines [ printf "unsigned char %s_initialized = 0;" name | name <- partitionNames config ]
-    , printf "// Initialize partition stack pointers."
-    , unlines [ printf "%s_sp = %s_memory + %d;" name name $ partitionMemorySize config name | name <- partitionNames config ]
-    , printf "// Run the partition scheduler."
-    , printf "for (cycles = atoi(argv[1]); cycles > 0; cycles--) {"
-    , indent $ unlines [ printf "risk_run_partition(%d, & %s_initialized, %s_sp, %s_main);" (partitionId config name) name name name | name <- schedule config ]
-    , printf "}"
-    , printf "return 0;"
-    ]
+  , printf "\trisk_cycle_count = atoi(argv[1]);"
+  , printf "\trisk_init();"
+  , printf "\trisk_entry();"
+  , printf "\treturn 0;"
   , printf "}"
   ]
   where
   config = configure spec
+  sched :: [(Int, Int)]
+  sched = zip s $ tail s ++ [head s]
+    where
+    s = [0 .. length (schedule config) - 1]
+
+  scheduleCase :: (Int, Int) -> String
+  scheduleCase (curr, next) = unlines
+    [ printf "case %-3d :" curr
+    , indent $ unlines
+      [ printf "// Set new scheduling phase and active partition."
+      , printf "risk_scheduling_phase = %d;" next
+      , printf "risk_active_partition = %d;" $ partitionId config $ schedule config !! next
+      , printf "// Load the partition's stack pointer."
+      , printf "asm(\"movq %%0, %%%%rsp\" : : \"r\" (%s_sp));" name
+      , printf "if (%s_initialized) {" name
+      , indent $ unlines
+        [ printf "// If partition is already running, return from its previous call to risk_yield."
+        , printf "asm(\"addq $0x10,%%rsp\");"
+        , printf "asm(\"popq %%rbp\");"
+        , printf "asm(\"ret\");"
+        ]
+      , printf "}"
+      , printf "else {"
+      , indent $ unlines
+        [ printf "// Else, initialize the partition by calling the partition's main entry point."
+        , printf "%s_initialized = 1;" name
+        , printf "%s_main();" name
+        ]
+      , printf "}"
+      , printf "break;"
+      ]
+    ]
+    where
+    name = partitionNames config !! next
+
   indent = unlines . map ("\t" ++) . lines
+  partitionBuffers :: (Name, PartitionMemory) -> [String]
+  partitionBuffers (name, PartitionMemory recv' send' _) = recvPtrs 0 recv'
+    where
+    recvPtrs :: Integer -> [(Integer, Name)] -> [String]
+    recvPtrs index a = case a of
+      [] -> recv index recv'
+      (_, from) : rest ->
+        [ printf "%s * const %s_from_%s_head_index = (%s *) (%s_memory + %d);" word name from word name $ index
+        , printf "%s * const %s_from_%s_tail_index = (%s *) (%s_memory + %d);" word name from word name $ index + 8
+        ] ++ recvPtrs (index + 16) rest
+    recv :: Integer -> [(Integer, Name)] -> [String]
+    recv index a = case a of
+      [] -> send index send'
+      (s, from) : rest -> printf "%s * const %s_from_%s_recv_buffer = %s_memory + %d;" byte name from name index : recv (index + s) rest
+    send :: Integer -> [(Integer, Name)] -> [String]
+    send index a = case a of
+      [] -> [printf "%s * const %s_data = %s_memory + %d;" byte name name index]
+      (s, to) : rest -> printf "%s * const %s_to_%s_send_buffer = %s_memory + %d;" byte name to name index : send (index + s) rest
+

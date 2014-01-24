@@ -43,7 +43,7 @@ configure spec' = Config
 
   -- A partitions' memory is receive and send buffers followed by general purpose memory.
   partitionMemory :: Name -> Integer -> PartitionMemory
-  partitionMemory name size = PartitionMemory recvBuffers sendBuffers $ size - (fromIntegral (length recvBuffers) + (sum $ fst $ unzip $ recvBuffers ++ sendBuffers))
+  partitionMemory name size = PartitionMemory recvBuffers sendBuffers $ size - (fromIntegral (16 * length recvBuffers) + (sum $ fst $ unzip $ recvBuffers ++ sendBuffers))
     where
     recvBuffers = [ (cReceiverBufferSize c, cSender   c) | c <- channels spec, cReceiver c == name ]
     sendBuffers = [ (cSenderBufferSize   c, cReceiver c) | c <- channels spec, cSender   c == name ]
@@ -59,7 +59,7 @@ partitionMemorySize config name = case a of
   [a] -> a
   _ -> error $ "Multiple partitions named: " ++ name
   where
-  a = [ fromIntegral (length recv) + sum (fst $ unzip $ recv ++ send) + dat | (name', PartitionMemory recv send dat) <- partitionMemory config, name == name' ]
+  a = [ fromIntegral (16 * length recv) + sum (fst $ unzip $ recv ++ send) + dat | (name', PartitionMemory recv send dat) <- partitionMemory config, name == name' ]
   
 
 -- | Total number of partitions.
