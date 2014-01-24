@@ -3,6 +3,7 @@ module RISK.Sim
   ( generateSimulator
   ) where
 
+import Data.List (intercalate)
 import Text.Printf
 
 import RISK.API (byte, word)
@@ -22,8 +23,8 @@ generateSimulator spec = writeFile "risk_sim.c" $ unlines
   , unlines [ printf "static unsigned char %s_initialized;" name | name <- partitionNames config ]
   , printf "// Partition memories (recv buffers + send buffers + data space)."
   , unlines [ printf "static %s %s_memory[%d];" byte name $ partitionMemorySize config name | name <- partitionNames config ]
-  , printf "// Partition channel buffers and data memory."
-  , unlines $ concatMap partitionBuffers $ partitionMemory config
+  , printf "// Pointers to the partition channel buffers and data regions."
+  , unlines $ concatMap declarePartitionPtrs $ partitionMemory config
   , printf "// Partition stack pointers."
   , unlines [ printf "static void * %s_sp;" name | name <- partitionNames config ]
   , printf "// Active partition."
@@ -36,7 +37,7 @@ generateSimulator spec = writeFile "risk_sim.c" $ unlines
   , printf "static int risk_cycle_count;"
   , printf ""
   , printf "// Kernel initialization."
-  , printf "void risk_init (void)"
+  , printf "static void risk_init (void)"
   , printf "{"
   , indent $ unlines
     [ printf "// Initialize active partition and scheduling phase."
@@ -47,20 +48,20 @@ generateSimulator spec = writeFile "risk_sim.c" $ unlines
     , unlines [ printf "%s_initialized = 0;" name | name <- partitionNames config ]
     , printf "// Initialize partition stack pointers."
     , unlines [ printf "%s_sp = %s_memory + %d;" name name $ partitionMemorySize config name | name <- partitionNames config ]
+    , printf "// Initialize partition channel buffer and data region pointers."
+    , unlines $ concatMap setPartitionPtrs $ partitionMemory config
     ]
   , printf "}"
   , printf ""
   , printf "// Kernel entry point."
-  , printf "void risk_entry (void)"
+  , printf "static void risk_entry (void)"
   , printf "{"
   , indent $ unlines
-    --XXX Why does this cause a Bus error: 10?
-    --[ printf "printf(\"risk_yield: %%d\\n\", risk_active_partition);"
-    --, printf "fflush(stdout);"
-    --, printf ""
-    [ printf "if (risk_cycle_count-- == 0) {"
+    --XXX Why does printfing here with arguments here cause a Bus error: 10?
+    --[ printf "printf(\"asdf %%d\\n\", 1);"
+    [ printf "// Exit the simulator if the cycle count drops to 0."
+    , printf "if (risk_cycle_count-- == 0)"
     , printf "\texit(0);"
-    , printf "}"
     , printf ""
     , printf "// Save the active partition's stack pointer."
     , printf "switch (risk_active_partition) {"
@@ -127,23 +128,36 @@ generateSimulator spec = writeFile "risk_sim.c" $ unlines
     where
     name = partitionNames config !! next
 
-  indent = unlines . map ("\t" ++) . lines
-  partitionBuffers :: (Name, PartitionMemory) -> [String]
-  partitionBuffers (name, PartitionMemory recv' send' _) = recvPtrs 0 recv'
-    where
-    recvPtrs :: Integer -> [(Integer, Name)] -> [String]
-    recvPtrs index a = case a of
-      [] -> recv index recv'
-      (_, from) : rest ->
-        [ printf "%s * const %s_from_%s_head_index = (%s *) (%s_memory + %d);" word name from word name $ index
-        , printf "%s * const %s_from_%s_tail_index = (%s *) (%s_memory + %d);" word name from word name $ index + 8
-        ] ++ recvPtrs (index + 16) rest
-    recv :: Integer -> [(Integer, Name)] -> [String]
-    recv index a = case a of
-      [] -> send index send'
-      (s, from) : rest -> printf "%s * const %s_from_%s_recv_buffer = %s_memory + %d;" byte name from name index : recv (index + s) rest
-    send :: Integer -> [(Integer, Name)] -> [String]
-    send index a = case a of
-      [] -> [printf "%s * const %s_data = %s_memory + %d;" byte name name index]
-      (s, to) : rest -> printf "%s * const %s_to_%s_send_buffer = %s_memory + %d;" byte name to name index : send (index + s) rest
+setPartitionPtrs :: (Name, PartitionMemory) -> [String]
+setPartitionPtrs (name, PartitionMemory recv' send' _) = recvPtrs 0 recv'
+  where
+  recvPtrs :: Integer -> [(Integer, Name)] -> [String]
+  recvPtrs index a = case a of
+    [] -> recv index recv'
+    (_, from) : rest ->
+      [ printf "%s_from_%s_head_index = (%s *) (%s_memory + %d);" name from word name $ index
+      , printf "%s_from_%s_tail_index = (%s *) (%s_memory + %d);" name from word name $ index + 8
+      ] ++ recvPtrs (index + 16) rest
+  recv :: Integer -> [(Integer, Name)] -> [String]
+  recv index a = case a of
+    [] -> send index send'
+    (s, from) : rest -> printf "%s_from_%s_recv_buffer = %s_memory + %d;" name from name index : recv (index + s) rest
+  send :: Integer -> [(Integer, Name)] -> [String]
+  send index a = case a of
+    [] -> [printf "%s_data = %s_memory + %d;" name name index]
+    (s, to) : rest -> printf "%s_to_%s_send_buffer = %s_memory + %d;" name to name index : send (index + s) rest
+
+declarePartitionPtrs :: (Name, PartitionMemory) -> [String]
+declarePartitionPtrs (name, PartitionMemory recv send _) =
+  concat
+    [ [ printf "%s * %s_from_%s_head_index;"  word name from
+      , printf "%s * %s_from_%s_tail_index;"  word name from
+      , printf "%s * %s_from_%s_recv_buffer;" byte name from
+      ]
+    | (_, from) <- recv ] ++
+  [ printf "%s * %s_to_%s_send_buffer;" byte name to | (_, to) <- send ] ++
+  [ printf "%s * %s_data;" byte name ]
+
+indent :: String -> String
+indent = intercalate "\n" . map ("\t" ++) . lines
 
