@@ -3,11 +3,11 @@ module RISK.Sim
   ( generateSimulator
   ) where
 
-import Data.List (intercalate)
 import Language.GIGL
 import Text.Printf
 
 import RISK.API (byte, word)
+import RISK.Compile
 import RISK.Config
 import RISK.Kernel
 import RISK.Spec
@@ -19,14 +19,20 @@ generateSimulator spec = writeFile "risk_sim.c" $ unlines
   , "#include <stdlib.h>"
   , "#include <stdio.h>"
   , ""
-  , "// Variables from GIGL model."
-  , unlines [ printf "static %s %s;" (typ t) name | (name, t) <- variables program ]
   , "// Partition entry points."
   , unlines [ printf "void %s_main (void);" name | name <- partitionNames config ]
   , "// Partition memories (recv buffers + send buffers + data space)."
   , unlines [ printf "static %s %s_memory[%d];" byte name $ partitionMemorySize config name | name <- partitionNames config ]
+  , "// Variables from GIGL model."
+  , unlines [ printf "static %s %s;" word name | name <- variables program ]
   , "// Scheduling cycle count."
   , "static int risk_cycle_count;"
+  , ""
+  , "// Set the partition memory pointers."
+  , "void risk_set_memory_ptrs(void)"
+  , "{"
+  , unlines [ printf "\t%s_memory_ptr = (%s) %s_memory;" name word name | name <- partitionNames config ]
+  , "}"
   , ""
   , "// Kernel entry point."
   , "static void risk_entry (void)"
@@ -40,7 +46,7 @@ generateSimulator spec = writeFile "risk_sim.c" $ unlines
     , printf ""
     , printf "// Save the active partition's stack pointer."
     , printf "switch (risk_active_partition) {"
-    , indent $ unlines [ printf "case %-3d : asm(\"movq %%%%rsp, %%0\" : \"=r\" (%s_sp) : ); break;" (partitionId config name) name | name <- partitionNames config ]
+    , indent $ unlines [ printf "case %-3d : asm(\"movq %%%%rsp, %%0\" : \"=r\" (%s_stack_ptr) : ); break;" (partitionId config name) name | name <- partitionNames config ]
     , printf "}"
     , printf ""
     , printf "// Run the next partition."
@@ -55,15 +61,7 @@ generateSimulator spec = writeFile "risk_sim.c" $ unlines
   , printf "static void risk_init (void)"
   , printf "{"
   , indent $ unlines
-    [ printf "// Initialize active partition and scheduling phase."
-    , printf "risk_active_partition = 0xffffffffffffffff;"
-    , printf "risk_scheduling_phase = %d;" $ length (schedule config) - 1
-    , printf ""
-    , printf "// Initialize partition init flags."
-    , unlines [ printf "%s_initialized = 0;" name | name <- partitionNames config ]
-    , printf "// Initialize partition stack pointers."
-    , unlines [ printf "%s_sp = (%s) (%s_memory + %d);" name word name $ partitionMemorySize config name | name <- partitionNames config ]
-    , printf "// Initialize partition channel buffer and data region pointers."
+    [ printf "// Initialize partition channel buffer and data region pointers."
     , unlines $ concatMap setPartitionPtrs $ partitionMemory config
     , printf "// Enter into the kernel's main loop."
     , printf "risk_entry();"
@@ -76,11 +74,14 @@ generateSimulator spec = writeFile "risk_sim.c" $ unlines
   , printf "\trisk_entry();"
   , printf "}"
   , printf ""
-  , printf "// Kernel's main."
+  , "// GIGL generated procedures."
+  , compile spec
+  , printf ""
+  , printf "// RISK simulator main."
   , printf "int main (int argc, char **argv)"
   , printf "{"
   , printf "\trisk_cycle_count = atoi(argv[1]);"
-  , printf "\trisk_init();"
+  , printf "\trisk_init_tmp();"
   , printf "\treturn 0;"
   , printf "}"
   ]
@@ -100,7 +101,7 @@ scheduleCase config (curr, next) = unlines
     , printf "risk_scheduling_phase = %d;" next
     , printf "risk_active_partition = %d;" $ partitionId config $ schedule config !! next
     , printf "// Load the partition's stack pointer."
-    , printf "asm(\"movq %%0, %%%%rsp\" : : \"r\" (%s_sp));" name
+    , printf "asm(\"movq %%0, %%%%rsp\" : : \"r\" (%s_stack_ptr));" name
     , printf "if (%s_initialized) {" name
     , indent $ unlines
       [ printf "// If partition is already running, return from its previous call to risk_yield."
@@ -140,13 +141,4 @@ setPartitionPtrs (name, PartitionMemory recv' send' _) = recvPtrs 0 recv'
   send index a = case a of
     [] -> [printf "%s_data = (%s) (%s_memory + %d);" name word name index]
     (s, to) : rest -> printf "%s_to_%s_send_buffer = (%s) (%s_memory + %d);" name to word name index : send (index + s) rest
-
-typ :: Type -> String
-typ a = case a of
-  TBool   -> "unsigned char"
-  TWord64 -> "unsigned long long"
-  TPair _ _ -> error $ "Not sure how to handle pair types in c."
-
-indent :: String -> String
-indent = intercalate "\n" . map ("\t" ++) . lines
 

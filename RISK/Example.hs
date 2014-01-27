@@ -4,7 +4,7 @@ module RISK.Example
 
 import RISK.X86_64
 
-exampleAsm :: Program
+exampleAsm :: AsmProgram
 exampleAsm =
   [ Custom  ".private_extern _main"
   , Custom  ".globl _main"

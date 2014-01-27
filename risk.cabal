@@ -23,6 +23,7 @@ library
   exposed-modules:
     RISK
     RISK.API
+    RISK.Compile
     RISK.Config
     RISK.Example
     RISK.Kernel

@@ -3,7 +3,6 @@ module RISK.Verify
   ( verifyKernel
   ) where
 
-import Data.List
 import Language.GIGL
 import MonadLib
 import System.IO
@@ -16,7 +15,7 @@ import RISK.Spec
 -- | Verifies properties of the kernel.
 verifyKernel :: Spec -> IO ()
 verifyKernel spec = runVerification $ do
-  verify "termination"              $ termination                              program
+  --verify "termination"              $ termination                              program
   verify "scheduling phase updates" $ schedulingPhaseUpdates (schedule config) program
   verify "partition scheduling"     $ partitionScheduling    (schedule config) program
   where
@@ -54,9 +53,10 @@ validateProgram = id
   - All assignments are valid: var or array index LHS.
 -}
 
--- All kernel entry points (labels) will terminate and return control to a user partition (RunNextPartition).
+-- All kernel entry points will terminate and return control to a user partition (RunNextPartition).
+{-
 termination :: Program Intrinsic -> IO Bool
-termination (Program _ stmt) = do
+termination (Program _ procs _) = do
   when (not loopFree) $ do
     putStrLn "Program has loops:" 
     mapM_ (putStrLn . intercalate " -> ") loops
@@ -109,6 +109,7 @@ termination (Program _ stmt) = do
     Intrinsic RunNextPartition -> ([], sofar, invalidTerm)
     Intrinsic InvalidExecution -> ([], sofar, from ++ invalidTerm)
     Intrinsic _ -> i
+-}
 
 -- Verifies that the schedulingPhase variable is updated correctly.
 schedulingPhaseUpdates :: [Name] -> Program Intrinsic -> IO Bool
