@@ -14,13 +14,14 @@ import RISK.Spec
 type RISK = GIGL Config Intrinsic
 
 data Intrinsic
-  = TransferMessages Int  -- ^ Transfer messages from a partition.
-  | IOInterruptHandler
-  | PartitionExceptionHandler
-  | SaveContext
-  | RunNextPartition
-  | SetMemoryPtrs
-  | InvalidExecution  -- ^ Marks the begining and end of code segements.  Used to check if execution goes off a cliff.
+  -- = TransferMessages String  -- ^ Transfer messages from a partition.
+  -- | IOInterruptHandler
+  -- | PartitionExceptionHandler
+  = SetMemoryPtrs
+  | SaveContext String
+  | RestoreContext String
+  | Return
+  | Exit
   deriving Show
 
 -- | Builds the kernel from the kernel specification.
@@ -37,28 +38,17 @@ kernel = do
   declareKernelInit
   declareKernelEntry
 
-{-
-  partitionInits      <- sequence [ var $ name ++ "_initialized" | name <- partitionNames config ] 
-  partitionMemoryPtrs <- sequence [ var $ name ++ "_memory_ptr"  | name <- partitionNames config ] 
-  partitionStackPtrs  <- sequence [ var $ name ++ "_stack_ptr"   | name <- partitionNames config ] 
-  sequence_ [ var (name ++ "_data") | name <- partitionNames config ]
-  sequence_ $ concat
-    [ [ var (name ++ "_from_" ++ from ++ "_head_index")  | (_, from) <- recv ] ++
-      [ var (name ++ "_from_" ++ from ++ "_tail_index")  | (_, from) <- recv ] ++
-      [ var (name ++ "_from_" ++ from ++ "_recv_buffer") | (_, from) <- recv ] ++
-      [ var (name ++ "_to_"   ++ to   ++ "_send_buffer") | (_, to)   <- send ]
-    | (name, PartitionMemory recv send _) <- partitionMemory config
-    ]
--}
-
-interruptSource :: E Word64
-interruptSource = Var "risk_interrupt_source"
+--interruptSource :: E Word64
+--interruptSource = Var "risk_interrupt_source"
 
 activePartition :: E Word64
 activePartition = Var "risk_active_partition"
 
 schedulingPhase :: E Word64
 schedulingPhase = Var "risk_scheduling_phase"
+
+cycleCount :: E Word64
+cycleCount = word64 "risk_cycle_count"
 
 -- Kernel initialization.
 declareKernelInit :: RISK ()
@@ -106,8 +96,18 @@ setPartitionPtrs (name, PartitionMemory recv' send' _) = recvPtrs 0 recv'
 
 -- Main kernel entry due to interrupt (timer, yield call, exception, etc).
 declareKernelEntry :: RISK ()
-declareKernelEntry = proc "risk_entry_tmp" $ do
-  saveContext
+declareKernelEntry = proc "risk_entry" $ do
+  config <- config
+  comment "Decrement the cycle counter.  Exit if zero."
+  if' (cycleCount .== Const 0) (intrinsic Exit) (cycleCount <== Sub cycleCount (Const 1))
+  comment "Save the context (stack pointer) of the active partition."
+  onActivePartition (intrinsic . SaveContext) $ return ()
+  comment "Switch context to the next partition in the schedule and run."
+  case' schedulingPhase (map (scheduleCase config) $ sched config) (return ())
+  where
+  sched :: Config -> [(Int, Int)]
+  sched config = zip s $ tail s ++ [head s] where s = [0 .. length (schedule config) - 1]
+  {-
   case' interruptSource
     [ (yield,     transferMessages)
     , (timer,     return ())
@@ -120,14 +120,31 @@ declareKernelEntry = proc "risk_entry_tmp" $ do
   timer     = (.== Const 2)
   io        = (.== Const 3)
   exception = (.== Const 4)
+  -}
 
--- Saves the current context to tmp.
-saveContext :: RISK ()
-saveContext = intrinsic SaveContext
+scheduleCase :: Config -> (Int, Int) -> (E Word64 -> E Bool, RISK ())
+scheduleCase config (curr, next) = ((.== (Const $ fromIntegral curr)), do
+  comment "// Set new scheduling phase and active partition."
+  schedulingPhase <== Const (fromIntegral next)
+  activePartition <== Const (fromIntegral $ partitionId config name)
+  comment "// Load the partition's stack pointer."
+  intrinsic $ RestoreContext $ schedule config !! next
+  if' partitionInitialized
+      (do
+        comment "// If partition is already running, return from its previous call to risk_yield."
+        intrinsic Return)
+      (do
+        comment "// Else, initialize the partition by calling the partition's main entry point."
+        partitionInitialized <== true
+        call $ name ++ "_main"))
+  where
+  name = schedule config !! next
+  partitionInitialized = bool (name ++ "_initialized")
+
 
 -- Transfer messages from current partition to recipients.
-transferMessages :: RISK ()
-transferMessages = onActivePartition $ intrinsic . TransferMessages
+--transferMessages :: RISK ()
+--transferMessages = onActivePartition (intrinsic . TransferMessages) $ return ()
 {-
   foreach sendBuffer
     sendPtr = sendBufferPtr
@@ -144,25 +161,8 @@ transferMessages = onActivePartition $ intrinsic . TransferMessages
 -}
 
 -- Do something based on the active partition.  TODO: Implement binary search for efficiency.
-onActivePartition :: (Int -> RISK ()) -> RISK ()
-onActivePartition k = do
+onActivePartition :: (String -> RISK ()) -> RISK () -> RISK ()
+onActivePartition k def = do
   config <- config
-  let f :: Int -> RISK ()
-      f i = if i == totalPartitions config - 1 then k i else if' (activePartition .== Const (fromIntegral i)) (k i) (f $ i + 1)
-  f 0
-
--- Runs the next partition in the schedule.
-runNextPartition :: RISK ()
-runNextPartition = do
-  scheduleNextPartition
-  intrinsic RunNextPartition
-
--- Schedules the next partition by updating schedulingPhase and activePartition.
-scheduleNextPartition :: RISK ()
-scheduleNextPartition = do
-  config <- config
-  let phases :: [(Word64, Word64)]  -- Maps schedule phase to parition id.
-      phases = zip [0 ..] $ map (fromIntegral . partitionId config) $ schedule config
-  schedulingPhase <== mux (schedulingPhase .== Const (fromIntegral $ length phases - 1)) (Const 0) (Add schedulingPhase $ Const 1)
-  activePartition <== mux' [ (schedulingPhase .== Const phase, Const partition) | (phase, partition) <- phases ] $ Const 0
+  case' activePartition [ ((.== Const (fromIntegral i)), k name) | (name, i) <- zip (partitionNames config) [0 ..] ] def
 

@@ -43,9 +43,13 @@ compileStmt a = case a of
     ]
   Assign (Var a) b -> printf "%s = %s;\n" a $ compileExpr b
   Assign _ _ -> error "Invalid LHS in assignment."
-  Intrinsic SetMemoryPtrs -> "risk_set_memory_ptrs();\n"
-  Intrinsic a -> printf "// intrinsic: %s\n" $ show a
   Call a -> printf "%s();\n" a
+  Intrinsic SetMemoryPtrs         -> "risk_set_memory_ptrs();\n"
+  Intrinsic Exit                  -> "exit(0);\n"
+  Intrinsic Return                -> "return;\n"
+  Intrinsic (SaveContext    name) -> printf "asm(\"movq %%%%rsp, %%0\" : \"=r\" (%s_stack_ptr) : );\n" name
+  Intrinsic (RestoreContext name) -> printf "asm(\"movq %%0, %%%%rsp\" : : \"r\" (%s_stack_ptr));\n" name
+  --Intrinsic a -> printf "// intrinsic: %s\n" $ show a
 
 compileExpr :: E a -> String
 compileExpr a = case a of
@@ -58,6 +62,7 @@ compileExpr a = case a of
   Snd     _     -> error "Snd expressions not supported."
   Const   a     -> cValue $ value a
   Add     a b   -> f2 "+" a b
+  Sub     a b   -> f2 "-" a b
   Not     a     -> f1 "!" a
   And     a b   -> f2 "&&" a b
   Or      a b   -> f2 "||" a b

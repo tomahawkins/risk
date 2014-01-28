@@ -13,24 +13,20 @@ to minimize covert timing channels.
 
 - The [partition specification](https://github.com/tomahawkins/risk/blob/master/RISK/Spec.hs)
   and the [kernel configuration](https://github.com/tomahawkins/risk/blob/master/RISK/Config.hs) modules are defined.
-- The syntax of the implementation DSL, [GIGL](https://github.com/tomahawkins/gigl), is operational.
-  - Currently GIGL has no simulator or backend implementation targets. 
-- An abstract [kernel](https://github.com/tomahawkins/risk/blob/master/RISK/Kernel.hs) is implemented,
-  with many high level operations (e.g. interrupt handlers, IPC, etc.) stubbed off as intrinsics.
-- A round-robin scheduler is implemented.
-- A kernel simulator is running in C with the provided flight control [example](https://github.com/tomahawkins/risk/blob/master/partitions.c).
-  Limitations:
-  - Supports non-preemptive partitions only, i.e. partitions must called yield.
-  - Currently lacks IPC.
-  - Memory partitions are not enforced.
+- The configurable [kernel](https://github.com/tomahawkins/risk/blob/master/RISK/Kernel.hs) is implemented in GIGL
+  with the following limitations:
+  - No IPC.
+  - No timer or IO interrupts. 
+  - No preemption.
+  - No memory protections.
+- The kernel compiler generates C from the GIGL model and provides a kernel simulator.
 
 ## Verification
 
 - Successfully verified properties of the kernel:
-  - Type Safety: Absense of runtime errors verified by [GIGL's use of Haskell types](https://github.com/tomahawkins/gigl/blob/master/Language/GIGL.hs).
+  - Type Safety: Absence of runtime errors verified by [GIGL's use of Haskell types](https://github.com/tomahawkins/gigl/blob/master/Language/GIGL.hs).
   - [Termination](https://github.com/tomahawkins/risk/blob/master/RISK/Verify.hs): The kernel will always yield to a user partition,
     verified by code reachability analysis.
-- GIGL can target [ACL2](http://www.cs.utexas.edu/~moore/acl2/), though ACL2 is not currently used in verification.
 
 # Random Ideas
 
