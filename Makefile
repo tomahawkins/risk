@@ -1,6 +1,6 @@
 .PHONY: all
 all: risk_sim risk_sim.s example.png
-	risk_sim 50
+	risk_sim 20
 
 #.PHONY: all
 #all: test.dot hello risk_sim.s

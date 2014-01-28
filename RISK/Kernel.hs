@@ -6,11 +6,12 @@ module RISK.Kernel
 
 import Data.Word
 import Language.GIGL
+import Text.Printf
 
 import RISK.Config
 import RISK.Spec
 
-type RISK = GIGL (Config, KernelState) Intrinsic
+type RISK = GIGL Config Intrinsic
 
 data Intrinsic
   = TransferMessages Int  -- ^ Transfer messages from a partition.
@@ -24,50 +25,19 @@ data Intrinsic
 
 -- | Builds the kernel from the kernel specification.
 kernelProgram :: Spec -> Program Intrinsic
-kernelProgram spec = snd $ elaborate (configure spec, error "KernelState not defined.") $ invalidExecution >> kernel >> invalidExecution
-
-invalidExecution :: RISK ()
-invalidExecution = intrinsic InvalidExecution
+kernelProgram spec = snd $ elaborate (configure spec) kernel
 
 -- Get the kernel configuration.
 config :: RISK Config
-config = getMeta >>= return . fst
+config = getMeta
 
 -- The kernel.
 kernel :: RISK ()
 kernel = do
-  declareKernelState
   declareKernelInit
   declareKernelEntry
 
--- Declares a procedure, wrapped with invalidExecution intrinsics.
-block :: String -> RISK () -> RISK ()
-block name code = do
-  invalidExecution
-  proc name code
-  invalidExecution
-
-infixr 0 <===
-(<===) :: Value' a => RISK (E a) -> E a -> RISK ()
-a <=== b = a >>= (<== b)
-
--- All the kernel state variables.
-data KernelState = KernelState
-  { interruptSource'     :: E Word64
-  , activePartition'     :: E Word64
-  , schedulingPhase'     :: E Word64
-  , partitionInits'      :: [E Bool]
-  , partitionStackPtrs'  :: [E Word64]
-  , partitionMemoryPtrs' :: [E Word64]
-  }
-
--- Build up the kernel state (global) variables and put it into the RISK monad.
-declareKernelState :: RISK ()
-declareKernelState = do
-  config <- config
-  interruptSource     <- var "risk_interrupt_source"
-  activePartition     <- var "risk_active_partition"
-  schedulingPhase     <- var "risk_scheduling_phase"
+{-
   partitionInits      <- sequence [ var $ name ++ "_initialized" | name <- partitionNames config ] 
   partitionMemoryPtrs <- sequence [ var $ name ++ "_memory_ptr"  | name <- partitionNames config ] 
   partitionStackPtrs  <- sequence [ var $ name ++ "_stack_ptr"   | name <- partitionNames config ] 
@@ -79,56 +49,66 @@ declareKernelState = do
       [ var (name ++ "_to_"   ++ to   ++ "_send_buffer") | (_, to)   <- send ]
     | (name, PartitionMemory recv send _) <- partitionMemory config
     ]
-  setMeta (config, KernelState
-    { interruptSource'     = interruptSource
-    , activePartition'     = activePartition
-    , schedulingPhase'     = schedulingPhase
-    , partitionInits'      = partitionInits
-    , partitionStackPtrs'  = partitionStackPtrs
-    , partitionMemoryPtrs' = partitionMemoryPtrs
-    })
+-}
 
--- Get a kernel state field.
-kernelState :: (KernelState -> a) -> RISK a
-kernelState f = getMeta >>= return . f . snd
+interruptSource :: E Word64
+interruptSource = Var "risk_interrupt_source"
 
--- Various kernal state getters.
-interruptSource     = kernelState interruptSource'
-activePartition     = kernelState activePartition'
-schedulingPhase     = kernelState schedulingPhase'
-partitionInits      = kernelState partitionInits'
-partitionMemoryPtrs = kernelState partitionMemoryPtrs'
-partitionStackPtrs  = kernelState partitionStackPtrs'
+activePartition :: E Word64
+activePartition = Var "risk_active_partition"
+
+schedulingPhase :: E Word64
+schedulingPhase = Var "risk_scheduling_phase"
 
 -- Kernel initialization.
 declareKernelInit :: RISK ()
-declareKernelInit = block "risk_init_tmp" $ do
+declareKernelInit = proc "risk_init" $ do
   config <- config
   comment "Initialize the active partition."
-  activePartition <=== Const 0xffffffffffffffff
+  activePartition <== Const 0xffffffffffffffff
   comment "Initialize the scheduling phase."
-  schedulingPhase <=== Const (fromIntegral $ length (schedule config) - 1)
+  schedulingPhase <== Const (fromIntegral $ length (schedule config) - 1)
   comment "Initialize the partition init flags."
-  partitionInits <- partitionInits
-  sequence_ [ a <== false |  a <- partitionInits ]
+  sequence_ [ bool (name ++ "_initialized")  <== false |  name <- partitionNames config ]
   comment "Initialize the partition memory pointers."
   intrinsic SetMemoryPtrs
   comment "Initialize the partition stack pointers."
-  partitionMemoryPtrs <- partitionMemoryPtrs
-  partitionStackPtrs  <- partitionStackPtrs
-  comment "XXX This stack pointers are not correct.  Need -1, but this causes alignment problems."
-  sequence_ [ sp <== Add mp (Const $ fromIntegral $ partitionMemorySize config name) | (name, sp, mp) <- zip3 (partitionNames config) partitionStackPtrs partitionMemoryPtrs ]
-  comment "XXX Initialize the partition channel buffer and data region pointers."
-  comment "Jump into the kernel."
-  --call "risk_entry"
-  call "risk_init"
+  sequence_ [ word64 (name ++ "_stack_ptr") <== Add (word64 $ name ++ "_memory_ptr") (Const $ fromIntegral $ partitionMemorySize config name) | name <- partitionNames config ]
+  comment "Initialize the partition channel buffer and data region pointers."
+  mapM_ setPartitionPtrs $ partitionMemory config
+  comment "Jump to the kernel."
+  call "risk_entry"
+
+setPartitionPtrs :: (Name, PartitionMemory) -> RISK ()
+setPartitionPtrs (name, PartitionMemory recv' send' _) = recvPtrs 0 recv'
+  where
+  recvPtrs :: Integer -> [(Integer, Name)] -> RISK ()
+  recvPtrs index a = case a of
+    [] -> recv index recv'
+    (_, from) : rest -> do
+      word64 (printf "%s_from_%s_head_index" name from) <== add (index    ) (word64 $ printf "%s_memory_ptr" name)
+      word64 (printf "%s_from_%s_tail_index" name from) <== add (index + 8) (word64 $ printf "%s_memory_ptr" name)
+      recvPtrs (index + 16) rest
+  recv :: Integer -> [(Integer, Name)] -> RISK ()
+  recv index a = case a of
+    [] -> send index send'
+    (s, from) : rest -> do
+      word64 (printf "%s_from_%s_recv_buffer" name from) <== add index (word64 $ printf "%s_memory_ptr" name)
+      recv (index + s) rest
+  send :: Integer -> [(Integer, Name)] -> RISK ()
+  send index a = case a of
+    [] -> word64 (printf "%s_data" name) <== add index (word64 $ printf "%s_memory_ptr" name)
+    (s, to) : rest -> do
+      word64 (printf "%s_to_%s_send_buffer" name to) <== add index (word64 $ printf "%s_memory_ptr" name)
+      send (index + s) rest
+  add :: Integer -> E Word64 -> E Word64
+  add i a = Add a $ Const $ fromIntegral i
 
 -- Main kernel entry due to interrupt (timer, yield call, exception, etc).
 declareKernelEntry :: RISK ()
-declareKernelEntry = block "risk_entry_tmp" $ do
+declareKernelEntry = proc "risk_entry_tmp" $ do
   saveContext
-  i <- interruptSource
-  case' i
+  case' interruptSource
     [ (yield,     transferMessages)
     , (timer,     return ())
     , (io,        intrinsic IOInterruptHandler)
@@ -167,9 +147,8 @@ transferMessages = onActivePartition $ intrinsic . TransferMessages
 onActivePartition :: (Int -> RISK ()) -> RISK ()
 onActivePartition k = do
   config <- config
-  p <- activePartition
   let f :: Int -> RISK ()
-      f i = if i == totalPartitions config - 1 then k i else if' (p .== Const (fromIntegral i)) (k i) (f $ i + 1)
+      f i = if i == totalPartitions config - 1 then k i else if' (activePartition .== Const (fromIntegral i)) (k i) (f $ i + 1)
   f 0
 
 -- Runs the next partition in the schedule.
@@ -184,8 +163,6 @@ scheduleNextPartition = do
   config <- config
   let phases :: [(Word64, Word64)]  -- Maps schedule phase to parition id.
       phases = zip [0 ..] $ map (fromIntegral . partitionId config) $ schedule config
-  schedulingPhase <- schedulingPhase
-  activePartition <- activePartition
   schedulingPhase <== mux (schedulingPhase .== Const (fromIntegral $ length phases - 1)) (Const 0) (Add schedulingPhase $ Const 1)
   activePartition <== mux' [ (schedulingPhase .== Const phase, Const partition) | (phase, partition) <- phases ] $ Const 0
 

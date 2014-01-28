@@ -19,15 +19,15 @@ generateSimulator spec = writeFile "risk_sim.c" $ unlines
   , "#include <stdlib.h>"
   , "#include <stdio.h>"
   , ""
+  , "// Scheduling cycle count."
+  , "static int risk_cycle_count;"
+  , ""
   , "// Partition entry points."
   , unlines [ printf "void %s_main (void);" name | name <- partitionNames config ]
   , "// Partition memories (recv buffers + send buffers + data space)."
   , unlines [ printf "static %s %s_memory[%d];" byte name $ partitionMemorySize config name | name <- partitionNames config ]
   , "// Variables from GIGL model."
   , unlines [ printf "static %s %s;" word name | name <- variables program ]
-  , "// Scheduling cycle count."
-  , "static int risk_cycle_count;"
-  , ""
   , "// Set the partition memory pointers."
   , "void risk_set_memory_ptrs(void)"
   , "{"
@@ -53,18 +53,6 @@ generateSimulator spec = writeFile "risk_sim.c" $ unlines
     , printf "switch (risk_scheduling_phase) {"
     , indent $ unlines $ map (scheduleCase config) sched
     , printf "}"
-    , printf "asm(\"return_risk_entry:\");"
-    ]
-  , printf "}"
-  , printf ""
-  , printf "// Kernel initialization."
-  , printf "static void risk_init (void)"
-  , printf "{"
-  , indent $ unlines
-    [ printf "// Initialize partition channel buffer and data region pointers."
-    , unlines $ concatMap setPartitionPtrs $ partitionMemory config
-    , printf "// Enter into the kernel's main loop."
-    , printf "risk_entry();"
     ]
   , printf "}"
   , printf ""
@@ -81,7 +69,7 @@ generateSimulator spec = writeFile "risk_sim.c" $ unlines
   , printf "int main (int argc, char **argv)"
   , printf "{"
   , printf "\trisk_cycle_count = atoi(argv[1]);"
-  , printf "\trisk_init_tmp();"
+  , printf "\trisk_init();"
   , printf "\treturn 0;"
   , printf "}"
   ]
@@ -105,9 +93,7 @@ scheduleCase config (curr, next) = unlines
     , printf "if (%s_initialized) {" name
     , indent $ unlines
       [ printf "// If partition is already running, return from its previous call to risk_yield."
-      , printf "asm(\"addq $0x10,%%rsp\");"
-      , printf "asm(\"popq %%rbp\");"
-      , printf "asm(\"ret\");"
+      , printf "return;"
       ]
     , printf "}"
     , printf "else {"
@@ -122,23 +108,4 @@ scheduleCase config (curr, next) = unlines
   ]
   where
   name = partitionNames config !! next
-
-setPartitionPtrs :: (Name, PartitionMemory) -> [String]
-setPartitionPtrs (name, PartitionMemory recv' send' _) = recvPtrs 0 recv'
-  where
-  recvPtrs :: Integer -> [(Integer, Name)] -> [String]
-  recvPtrs index a = case a of
-    [] -> recv index recv'
-    (_, from) : rest ->
-      [ printf "%s_from_%s_head_index = (%s) (%s_memory + %d);" name from word name $ index
-      , printf "%s_from_%s_tail_index = (%s) (%s_memory + %d);" name from word name $ index + 8
-      ] ++ recvPtrs (index + 16) rest
-  recv :: Integer -> [(Integer, Name)] -> [String]
-  recv index a = case a of
-    [] -> send index send'
-    (s, from) : rest -> printf "%s_from_%s_recv_buffer = (%s) (%s_memory + %d);" name from word name index : recv (index + s) rest
-  send :: Integer -> [(Integer, Name)] -> [String]
-  send index a = case a of
-    [] -> [printf "%s_data = (%s) (%s_memory + %d);" name word name index]
-    (s, to) : rest -> printf "%s_to_%s_send_buffer = (%s) (%s_memory + %d);" name to word name index : send (index + s) rest
 

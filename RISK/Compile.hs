@@ -17,7 +17,7 @@ compile spec = unlines $
   [ printf "void %s (void);" name | (name, _) <- procs ] ++
   map compileProc procs
   where
-  procs = procedures $ kernelProgram spec
+  procs = kernelProgram spec
 
 compileProc :: (Name, Stmt Intrinsic) -> String
 compileProc (name, stmt) = unlines
