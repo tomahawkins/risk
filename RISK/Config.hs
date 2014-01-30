@@ -16,9 +16,9 @@ import RISK.Spec
 
 -- | Memory is a list of recv buffers, send buffers, and a general purpose memory region.
 data PartitionMemory = PartitionMemory
-  { recvBuffers :: [(Integer, Name)]  -- ^ A list of receiving buffers (size, corresponding channel name).
-  , sendBuffers :: [(Integer, Name)]  -- ^ A list of sending buffers (size, corresponding channel name).
-  , dataSize    :: Integer            -- ^ Size of general purpose memory region.
+  { recvBuffers :: [(Int, Name)]  -- ^ A list of receiving buffers (log2 size, corresponding channel name).
+  , sendBuffers :: [(Int, Name)]  -- ^ A list of sending buffers (log2 size, corresponding channel name).
+  , dataSize    :: Int            -- ^ Size of general purpose memory region.
   }
 
 -- | Kernel configuration.
@@ -42,8 +42,8 @@ configure spec' = Config
   spec = validateSpec spec'
 
   -- A partitions' memory is receive and send buffers followed by general purpose memory.
-  partitionMemory :: Name -> Integer -> PartitionMemory
-  partitionMemory name size = PartitionMemory recvBuffers sendBuffers $ size - (fromIntegral (16 * length recvBuffers) + (sum $ fst $ unzip $ recvBuffers ++ sendBuffers))
+  partitionMemory :: Name -> Int -> PartitionMemory
+  partitionMemory name size = PartitionMemory recvBuffers sendBuffers $ size - (length recvBuffers * 2 + (sum $ fst $ unzip $ recvBuffers ++ sendBuffers))
     where
     recvBuffers = [ (cReceiverBufferSize c, cSender   c) | c <- channels spec, cReceiver c == name ]
     sendBuffers = [ (cSenderBufferSize   c, cReceiver c) | c <- channels spec, cSender   c == name ]
@@ -53,13 +53,13 @@ partitionNames :: Config -> [Name]
 partitionNames = fst .unzip . partitionMemory
 
 -- Partition memory size in bytes.
-partitionMemorySize :: Config -> Name -> Integer
+partitionMemorySize :: Config -> Name -> Int
 partitionMemorySize config name = case a of
   [] -> error $ "No partition named: " ++ name
   [a] -> a
   _ -> error $ "Multiple partitions named: " ++ name
   where
-  a = [ fromIntegral (16 * length recv) + sum (fst $ unzip $ recv ++ send) + dat | (name', PartitionMemory recv send dat) <- partitionMemory config, name == name' ]
+  a = [ length recv * 2 + sum (fst $ unzip $ recv ++ send) + dat | (name', PartitionMemory recv send dat) <- partitionMemory config, name == name' ]
   
 
 -- | Total number of partitions.

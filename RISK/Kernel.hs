@@ -22,7 +22,7 @@ data Intrinsic
   | StartPartition String
   | Return
   | ExitSimulation
-  | TransferMessages String Integer String Integer  -- ^ Transfer messages from one partition to another.
+  | TransferMessages String Int String Int  -- ^ Transfer messages from one partition to another.
   deriving (Show, Eq)
 
 -- | Builds the kernel from the kernel specification.
@@ -81,25 +81,25 @@ declareKernelInit = proc "risk_init" $ do
 setPartitionPtrs :: (Name, PartitionMemory) -> RISK ()
 setPartitionPtrs (name, PartitionMemory recv' send' _) = recvPtrs 0 recv'
   where
-  recvPtrs :: Integer -> [(Integer, Name)] -> RISK ()
+  recvPtrs :: Integer -> [(Int, Name)] -> RISK ()
   recvPtrs index a = case a of
     [] -> recv index recv'
     (_, from) : rest -> do
       word64 (printf "%s_from_%s_head_index" name from) <== add (index    ) (word64 $ printf "%s_memory_ptr" name)
       word64 (printf "%s_from_%s_tail_index" name from) <== add (index + 1) (word64 $ printf "%s_memory_ptr" name)
       recvPtrs (index + 2) rest
-  recv :: Integer -> [(Integer, Name)] -> RISK ()
+  recv :: Integer -> [(Int, Name)] -> RISK ()
   recv index a = case a of
     [] -> send index send'
     (s, from) : rest -> do
       word64 (printf "%s_from_%s_recv_buffer" name from) <== add index (word64 $ printf "%s_memory_ptr" name)
-      recv (index + s) rest
-  send :: Integer -> [(Integer, Name)] -> RISK ()
+      recv (index + 2 ^ s) rest
+  send :: Integer -> [(Int, Name)] -> RISK ()
   send index a = case a of
     [] -> word64 (printf "%s_data" name) <== add index (word64 $ printf "%s_memory_ptr" name)
     (s, to) : rest -> do
       word64 (printf "%s_to_%s_send_buffer" name to) <== add index (word64 $ printf "%s_memory_ptr" name)
-      send (index + s) rest
+      send (index + 2 ^ s) rest
   add :: Integer -> E Word64 -> E Word64
   add i a = Add a $ Const $ fromIntegral i
 

@@ -55,9 +55,9 @@ compileStmt a = case a of
       where
       args :: [String]
       args =
-        [ printf "%d" sendSize
+        [ printf "0x%xULL" $ (2 ^ sendSize :: Int)
         , printf "(word *) %s_to_%s_send_buffer" from to
-        , printf "%d" recvSize
+        , printf "0x%xULL" $ (2 ^ recvSize - 1 :: Int)
         , printf "(word *) %s_from_%s_recv_buffer" to from
         , printf "%s_from_%s_head_index" to from
         , printf "& %s_from_%s_tail_index" to from

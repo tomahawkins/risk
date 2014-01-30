@@ -54,10 +54,10 @@ cFile name memory = unlines
   , printf ""
   ]
   where
-  recvMessage :: (Integer, Name) -> String
+  recvMessage :: (Int, Name) -> String
   recvMessage (size, sender) = unlines
     [ printf "// Receive buffer from %s." sender
-    , printf "extern word const * const %s_from_%s_recv_buffer;  // %d bytes" name sender size
+    , printf "extern word const * const %s_from_%s_recv_buffer;  // 0x%x words" name sender (2 ^ size :: Int)
     , printf ""
     , printf "// Head and tail indecies of receive buffer from %s.  Head is managed by the partition.  Tail is managed by the kernel." sender
     , printf "extern word * const %s_from_%s_recv_head_index;" name sender
@@ -70,10 +70,10 @@ cFile name memory = unlines
     , printf "}"
     , printf ""
     ]
-  sendMessage :: (Integer, Name) -> String
+  sendMessage :: (Int, Name) -> String
   sendMessage (size, receiver) = unlines
     [ printf "// Sending buffer to %s." receiver
-    , printf "extern word * const %s_to_%s_send_buffer;  // %d words" name receiver size
+    , printf "extern word * const %s_to_%s_send_buffer;  // 0x%x words" name receiver (2 ^ size :: Int)
     , printf ""
     , printf "// Sends a message to the %s partition." receiver
     , printf "void %s_to_%s_send_msg(word size, word * msg)" name receiver
