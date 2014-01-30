@@ -9,7 +9,7 @@ to minimize covert timing channels.
 
 # RISK Status
 
-## Implementation
+## Implementation Status
 
 - The [partition specification](https://github.com/tomahawkins/risk/blob/master/RISK/Spec.hs)
   and the [kernel configuration](https://github.com/tomahawkins/risk/blob/master/RISK/Config.hs) modules are defined.
@@ -19,14 +19,23 @@ to minimize covert timing channels.
   - No timer or IO interrupts. 
   - No preemption.
   - No memory protections.
-- The kernel compiler generates C from the GIGL model and provides a kernel simulator.
+- The kernel compiler generates C from the GIGL model to provide a simulation of the kernel.
+  - Demonstrated by the flight controller example.
 
-## Verification
+## Verification Status
 
 - Successfully verified properties of the kernel:
   - Type Safety: Absence of runtime errors verified by [GIGL's use of Haskell types](https://github.com/tomahawkins/gigl/blob/master/Language/GIGL.hs).
-  - [Termination](https://github.com/tomahawkins/risk/blob/master/RISK/Verify.hs): The kernel will always yield to a user partition,
-    verified by code reachability analysis.
+  - [Termination](https://github.com/tomahawkins/risk/blob/master/RISK/Verify.hs):
+    The kernel will never get stuck in an infinite loop.
+    Verified by limitations of GIGL (i.e. no loops) and call graph analysis (i.e. no recursion).
+  - [Return to Partition](https://github.com/tomahawkins/risk/blob/master/RISK/Verify.hs):
+    The kernel will always yield to a user partition.
+    Verified by program path enumeration.
+  - [Valid Message Transfer](https://github.com/tomahawkins/risk/blob/master/RISK/Verify.hs):
+    The kernel only transfers messages between specified partitions.  Currently message transfer is handled by an abstract intrinsic.
+    Verified by extracting all TransferMessages intrinsics and comparing source and destination partitions to spec.
+
 
 # Random Ideas
 

@@ -44,12 +44,24 @@ compileStmt a = case a of
   Assign (Var a) b -> printf "%s = %s;\n" a $ compileExpr b
   Assign _ _ -> error "Invalid LHS in assignment."
   Call a -> printf "%s();\n" a
-  Intrinsic SetMemoryPtrs         -> "risk_set_memory_ptrs();\n"
-  Intrinsic Exit                  -> "exit(0);\n"
-  Intrinsic Return                -> "return;\n"
-  Intrinsic (SaveContext    name) -> printf "asm(\"movq %%%%rsp, %%0\" : \"=r\" (%s_stack_ptr) : );\n" name
-  Intrinsic (RestoreContext name) -> printf "asm(\"movq %%0, %%%%rsp\" : : \"r\" (%s_stack_ptr));\n" name
-  --Intrinsic a -> printf "// intrinsic: %s\n" $ show a
+  Intrinsic a -> case a of
+    SetMemoryPtrs       -> "risk_set_memory_ptrs();\n"
+    ExitSimulation      -> "exit(0);\n"
+    Return              -> "return;\n"
+    SaveContext    name -> printf "asm(\"movq %%%%rsp, %%0\" : \"=r\" (%s_stack_ptr) : );\n" name
+    RestoreContext name -> printf "asm(\"movq %%0, %%%%rsp\" : : \"r\" (%s_stack_ptr));\n" name
+    StartPartition name -> printf "%s_main();\n" name
+    TransferMessages from sendSize to recvSize -> printf "risk_transfer_messages(%s);\n" $ intercalate ", " args
+      where
+      args :: [String]
+      args =
+        [ printf "%d" sendSize
+        , printf "(word *) %s_to_%s_send_buffer" from to
+        , printf "%d" recvSize
+        , printf "(word *) %s_from_%s_recv_buffer" to from
+        , printf "%s_from_%s_head_index" to from
+        , printf "& %s_from_%s_tail_index" to from
+        ]
 
 compileExpr :: E a -> String
 compileExpr a = case a of

@@ -25,15 +25,15 @@ data Spec = Spec
 data Partition = Partition
   { pName   :: Name         -- ^ The partition name.
   , pRate   :: Maybe Double -- ^ Execution rate of partition in Hz.  If Nothing, thread runs in background.
-  , pMemory :: Integer      -- ^ The memory size allocated to the partition in bytes.
+  , pMemory :: Integer      -- ^ The memory size allocated to the partition in words.
   }
 
 -- | Inter partition communication channel.
 data Channel = Channel
   { cSender             :: Name       -- ^ Sending partition name.
-  , cSenderBufferSize   :: Integer    -- ^ Sending buffer size in bytes.
+  , cSenderBufferSize   :: Integer    -- ^ Sending buffer size in words.
   , cReceiver           :: Name       -- ^ Receiving partition name.
-  , cReceiverBufferSize :: Integer    -- ^ Receiving buffer size in bytes.
+  , cReceiverBufferSize :: Integer    -- ^ Receiving buffer size in words.
   }
 
 -- | Partition scheduling constraints.
@@ -54,7 +54,7 @@ validateSpec = id --XXX
 graphviz :: Spec -> String
 graphviz (Spec partitions channels _) = unlines $
   [ "digraph risk_config {"
-  , concat [ printf "  %s [label=\"%s\\n%s, %d bytes\"];\n" name name (rate r) size | Partition name r size <- partitions ]
+  , concat [ printf "  %s [label=\"%s\\n%s, %d words\"];\n" name name (rate r) size | Partition name r size <- partitions ]
   , concatMap channel channels
   , "}"
   ]

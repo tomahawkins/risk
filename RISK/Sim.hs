@@ -6,7 +6,6 @@ module RISK.Sim
 import Language.GIGL
 import Text.Printf
 
-import RISK.API (byte, word)
 import RISK.Compile
 import RISK.Config
 import RISK.Kernel
@@ -19,19 +18,20 @@ generateSimulator spec = writeFile "risk_sim.c" $ unlines
   , "#include <stdlib.h>"
   , "#include <stdio.h>"
   , ""
+  , "#include \"risk_lib.h\""
+  , ""
   , "// Partition entry points."
   , unlines [ printf "void %s_main (void);" name | name <- partitionNames config ]
   , "// Partition memories (recv buffers + send buffers + data space)."
-  , unlines [ printf "static %s %s_memory[%d];" byte name $ partitionMemorySize config name | name <- partitionNames config ]
+  , unlines [ printf "static word %s_memory[%d];" name $ partitionMemorySize config name | name <- partitionNames config ]
   , "// Variables from GIGL model."
-  , unlines [ printf "static %s %s;" word name | name <- variables program ]
+  , unlines [ printf "static word %s;" name | name <- variables program ]
   , "// Set the partition memory pointers."
   , "void risk_set_memory_ptrs(void)"
   , "{"
-  , unlines [ printf "\t%s_memory_ptr = (%s) %s_memory;" name word name | name <- partitionNames config ]
+  , unlines [ printf "\t%s_memory_ptr = (word) %s_memory;" name name | name <- partitionNames config ]
   , "}"
   , ""
-  , "// GIGL generated procedures."
   , compile spec
   , ""
   , "// Partition yields control back to the kernel."

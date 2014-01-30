@@ -2,6 +2,10 @@
 all: risk_sim risk_sim.s example.png
 	risk_sim 15
 
+.PHONY: verify
+verify: Example.hs dist/setup-config
+	runhaskell -W Example.hs
+
 #.PHONY: all
 #all: test.dot hello risk_sim.s
 #	./hello
@@ -18,7 +22,7 @@ example.dot risk_sim.c: Example.hs dist/setup-config
 example.png: example.dot
 	dot -Tpng -oexample.png example.dot
 
-risk_sim: risk_sim.c partitions.c
+risk_sim: risk_sim.c partitions.c risk_lib.h risk_lib.c
 	gcc -Wall -o risk_sim *.c
 
 risk_sim.s: risk_sim

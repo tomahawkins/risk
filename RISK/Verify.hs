@@ -3,25 +3,29 @@ module RISK.Verify
   ( verifyKernel
   ) where
 
+import Data.List (nub)
+import Data.Maybe (fromJust)
 import Language.GIGL
 import MonadLib
 import System.IO
 import Text.Printf
 
-import RISK.Config
+--import RISK.Config
 import RISK.Kernel
 import RISK.Spec
 
 -- | Verifies properties of the kernel.
 verifyKernel :: Spec -> IO ()
 verifyKernel spec = runVerification $ do
-  --verify "termination"              $ termination                              program
-  verify "scheduling phase updates" $ schedulingPhaseUpdates (schedule config) program
-  verify "partition scheduling"     $ partitionScheduling    (schedule config) program
+  verify "kernel always terminates"                $ termination       program
+  verify "kernel always returns to user partition" $ returnToPartition program
+  verify "kernel only transfers messages between specified partitions" $ validMessageTransfer spec program
+  --verify "scheduling phase updates" $ schedulingPhaseUpdates (schedule config) program
+  --verify "partition scheduling"     $ partitionScheduling    (schedule config) program
+  --verify "partition context initialization"     $ XXX  -- All stack pointers initialized correctly.
   where
-  config   = configure spec
-  --sched    = schedule config
-  program  = validateProgram $ kernelProgram spec
+  --config  = configure spec
+  program = kernelProgram spec
 
 type Verify = StateT [(String, IO Bool)] Id
 
@@ -43,74 +47,95 @@ runVerification suite = do
   checks :: [(String, IO Bool)]
   checks = snd $ runId $ runStateT [] suite
 
-validateProgram :: Program Intrinsic -> Program Intrinsic
-validateProgram = id
-{- XXX
-  - All labels unique.
-  - All variables unique.
-  - All goto label references valid.
-  - All variable references valid.
-  - All assignments are valid: var or array index LHS.
--}
-
--- All kernel entry points will terminate and return control to a user partition (RunNextPartition).
-{-
+-- All kernel entry points will terminate.  Kernel will not get stuck in an infinite loop.
 termination :: Program Intrinsic -> IO Bool
-termination (Program _ procs _) = do
-  when (not loopFree) $ do
-    putStrLn "Program has loops:" 
-    mapM_ (putStrLn . intercalate " -> ") loops
-
-  when (not noInvalidTerminations) $ do
-    putStrLn "Program has invalid terminations:" 
-    mapM_ putStrLn invalidTerms
-
-  return $ loopFree && noInvalidTerminations
+termination program 
+  | callGraphCorrect = return True
+  | otherwise = do
+    putStrLn "Unexpected call graph:" 
+    sequence_ [ printf "  %s -> %s\n" a b | (a, b) <- callGraph ]
+    return False
   where
-  labels = l stmt
-  l a = case a of
-    Label a -> [a]
-    Seq a b -> l a ++ l b
-    If  _ a b -> l a ++ l b
-    _ -> []
+  calls :: Stmt Intrinsic -> [String]
+  calls a = case a of
+    Comment _ -> []
+    Null -> []
+    Seq a b -> calls a ++ calls b
+    If _ a b -> calls a ++ calls b
+    Assign _ _ -> []
+    Call a -> [a]
+    Intrinsic _ -> []
 
-  (_, transitions', invalidTerms') = trans ([], [], []) stmt
-  transitions  = nub transitions'
-  invalidTerms = nub invalidTerms'
+  expectedCallGraph = [("risk_init", "risk_entry")]
+  callGraph = nub [ (caller, callee) | (caller, stmt) <- program, callee <- calls stmt ]
+  callGraphCorrect = expectedCallGraph == callGraph
 
-  noInvalidTerminations = null invalidTerms
+-- The risk_entry procedure will always return to a user partition.
+returnToPartition :: Program Intrinsic -> IO Bool
+returnToPartition program
+  | null invalidPaths = return True
+  | otherwise = do
+    putStrLn "Invalid paths in risk_entry:"
+    mapM_ print invalidPaths
+    return False
+  where
+  entryPaths = paths $ fromJust $ lookup "risk_entry" program
+  invalidPaths :: [Path]
+  invalidPaths = filter (not . validPath) entryPaths
+  validPath :: Path -> Bool
+  validPath a = restoresContext a -- && 
+  restoresContext :: Path -> Bool
+  restoresContext = any restoreContext
+  restoreContext a = case a of
+    Intrinsic' (RestoreContext _) -> True
+    _ -> False
 
-  loopFree = null loops
+data Step
+  = Call'      String
+  | Intrinsic' Intrinsic
+  deriving Show
 
-  loops :: [[String]]
-  loops = concat [ [ p | p <- paths [] l, p /= nub p ] | l <- labels ]
+type Path = [Step]
 
-  paths :: [String] -> String -> [[String]]
-  paths sofar a
-    | elem a sofar = [sofar']
-    | otherwise    = concatMap (paths sofar') [ t | (f, t) <- transitions, f == a ]
-    where
-    sofar' = sofar ++ [a]
+-- All possible paths through a statement.  TODO: Filter out impossible paths (some simple variable value analysis).
+paths :: Stmt Intrinsic -> [Path]
+paths a = case a of
+  Seq       a b   -> [ a ++ b | a <- paths a, b <- paths b ]
+  If        _ a b -> paths a ++ paths b
+  Comment   _     -> [[]]
+  Null            -> [[]]
+  Assign    _ _   -> [[]]
+  Call      a     -> [[Call'      a]]
+  Intrinsic a     -> [[Intrinsic' a]]
 
-  trans :: ([String], [(String, String)], [String]) -> Stmt Intrinsic -> ([String], [(String, String)], [String])
-  trans i@(from, sofar, invalidTerm) b = case b of
-    Null -> i
-    Assign _ _ -> i
-    Label a -> ([a], [ (b, a) | b <- from ] ++ sofar, invalidTerm)
-    Goto  a -> ([],  [ (b, a) | b <- from ] ++ sofar, invalidTerm)
-    Seq a b -> trans (trans i a) b
-    If _ a b -> (from', sofar', invalidTerm')
-      where
-      (fromA, sofarA, invalidTermA) = trans (from, [], []) a
-      (fromB, sofarB, invalidTermB) = trans (from, [], []) b
-      from'  = fromA ++ fromB
-      sofar' = sofar ++ sofarA ++ sofarB
-      invalidTerm' = invalidTerm ++ invalidTermA ++ invalidTermB
-    Intrinsic RunNextPartition -> ([], sofar, invalidTerm)
-    Intrinsic InvalidExecution -> ([], sofar, from ++ invalidTerm)
-    Intrinsic _ -> i
--}
+-- Only messages are transfered between specified partitions.
+validMessageTransfer :: Spec -> Program Intrinsic -> IO Bool
+validMessageTransfer spec program
+  | null invalidTransfers = return True
+  | otherwise = do
+    putStrLn "Invalid message transfers:"
+    mapM_ print invalidTransfers
+    return False
+  where
+  transfers = [ (a, b) | TransferMessages a _ b _ <- programIntrinsics program ]
+  validTransfers = [ (a, b) | Channel a _ b _ <- channels spec ]
+  invalidTransfers = filter (not . flip elem validTransfers) transfers
 
+programIntrinsics :: Program Intrinsic -> [Intrinsic]
+programIntrinsics p = nub $ f $ foldl1 Seq $ snd $ unzip p
+  where
+  f :: Stmt Intrinsic -> [Intrinsic]
+  f a = case a of
+    Seq       a b   -> f a ++ f b
+    If        _ a b -> f a ++ f b
+    Comment   _     -> []
+    Null            -> []
+    Assign    _ _   -> []
+    Call      _     -> []
+    Intrinsic a     -> [a]
+
+
+{-
 -- Verifies that the schedulingPhase variable is updated correctly.
 schedulingPhaseUpdates :: [Name] -> Program Intrinsic -> IO Bool
 schedulingPhaseUpdates _ _ = return False
@@ -118,4 +143,4 @@ schedulingPhaseUpdates _ _ = return False
 -- Verifies that the correct activePartition corresponds with the schedulingPhase.
 partitionScheduling :: [Name] -> Program Intrinsic -> IO Bool
 partitionScheduling _ _ = return False
-
+-}
