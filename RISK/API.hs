@@ -35,6 +35,8 @@ headerFile name memory = unlines
   , ""
   , "// Receive message on incoming channels.  If no messages are available on a channel, size will be zero."
   , unlines [ printf "void %s_from_%s_recv_msg(word * size, word * msg);" name sender | (_, sender) <- recvBuffers memory ]
+  , "// Clear outgoing channels."
+  , unlines [ printf "void %s_to_%s_send_clr(void);" name receiver | (_, receiver) <- sendBuffers memory ]
   , "// Transmit message on outgoing channels."
   , unlines [ printf "void %s_to_%s_send_msg(word size, word * msg);" name receiver | (_, receiver) <- sendBuffers memory ]
   , ""
@@ -96,14 +98,35 @@ cFile name memory = unlines
   sendMessage :: (Int, Name) -> String
   sendMessage (size, receiver) = unlines
     [ printf "// Sending buffer to %s." receiver
-    , printf "extern word * const %s_to_%s_send_buffer;  // 0x%x words" name receiver (2 ^ size :: Int)
+    , printf "extern word * const %s_send_buffer;  // 0x%x words" prefix (2 ^ size :: Int)
+    , printf ""
+    , printf "static word %s_send_index;" prefix
+    , printf ""
+    , printf "// Clear send channel."
+    , printf "void %s_send_clr(void)" prefix
+    , printf "{"
+    , indent $ unlines
+      [ printf "word i;"
+      , printf "%s_send_index = 0;" prefix
+      , printf "for (i = 0; i < 0x%xULL; i++)" $ (2 ^ size :: Int)
+      , indent $ printf "%s_send_buffer[i] = 0;" prefix
+      ]
+    , printf "}"
     , printf ""
     , printf "// Sends a message to the %s partition." receiver
-    , printf "void %s_to_%s_send_msg(word size, word * msg)" name receiver
+    , printf "void %s_send_msg(word size, word * msg)" prefix
     , printf "{"
-    , printf "\t//XXX"
+    , indent $ unlines
+      [ printf "word i;"
+      , printf "%s_send_buffer[%s_send_index++] = size;" prefix prefix
+      , printf "for (i = 0; i < size; i++)"
+      , indent $ printf "%s_send_buffer[%s_send_index++] = msg[i];" prefix prefix
+      ]
     , printf "}"
     , printf ""
     ]
+    where
+    prefix :: String
+    prefix = printf "%s_to_%s" name receiver
 
 

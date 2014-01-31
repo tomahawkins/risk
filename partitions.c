@@ -9,16 +9,13 @@
 
 void sensor_main (void)
 {
-	extern word sensor_to_control_send_buffer;
-	word * buf = (word *) sensor_to_control_send_buffer;
+	word msg1[1] = { 1 };
+	word msg2[2] = { 2, 3 };
 	for (;;) {
 		printf("Hi, I'm the sensor.  I'm sending these messages to the controller:  [ 1 ] [ 2 3 ]\n");
-		buf[0] = 1;
-		buf[1] = 1;
-		buf[2] = 2;
-		buf[3] = 2;
-		buf[4] = 3;
-		buf[5] = 0;
+		sensor_to_control_send_clr();
+		sensor_to_control_send_msg(1, msg1);
+		sensor_to_control_send_msg(2, msg2);
 		risk_yield();
 	}
 }

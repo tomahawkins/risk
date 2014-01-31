@@ -4,8 +4,6 @@ The goals of RISK are to produce a compile-time configurable
 separation kernel, simple enough to be verified automatically.
 Partitions communicate via. message passing over unidirectional,
 verifiable information flow control (IFC) channels.
-And for realtime partitions, an attempt will be made
-to minimize covert timing channels.
 
 # RISK Status
 
@@ -13,9 +11,9 @@ to minimize covert timing channels.
 
 - The [partition specification](https://github.com/tomahawkins/risk/blob/master/RISK/Spec.hs)
   and the [kernel configuration](https://github.com/tomahawkins/risk/blob/master/RISK/Config.hs) modules are defined.
-- The configurable [kernel](https://github.com/tomahawkins/risk/blob/master/RISK/Kernel.hs) is partially implemented in GIGL.
-  - Round robin scheduler is running.
-  - IPC is implemented and tested.  No friendly API yet.
+- The configurable [kernel](https://github.com/tomahawkins/risk/blob/master/RISK/Kernel.hs) is partially implemented.
+  - A round-robin scheduler is running.
+  - IPC is implemented and tested.  See the [example](https://github.com/tomahawkins/risk/blob/master/partitions.c).
   - Current limitations:
     - No timer or IO interrupts. 
     - No preemption.
@@ -34,12 +32,14 @@ to minimize covert timing channels.
   - [Valid Message Transfer](https://github.com/tomahawkins/risk/blob/master/RISK/Verify.hs):
     The kernel only transfers messages between specified partitions.
     Verified by extracting all TransferMessages intrinsics and comparing source and destination partitions to spec.
-- Verification assumes correctness of:
-  - Haskell compiler.
-  - Verification analysis functions.
-  - GIGL to C code generation.
-  - Intrinsic implementation.
-  - C compiler, assembler, hardware, etc.
+- Verification assumes:
+  - A complete specification (which is far from it at the moment).
+  - The trusted computing base:
+    - Haskell compiler.
+    - Verification analysis functions.
+    - RISK's GIGL compiler.
+    - RISK intrinsic implementations, e.g. TransferMessages, RestoreContext.
+    - C compiler, assembler, hardware, etc.
 
 # Random Ideas
 
