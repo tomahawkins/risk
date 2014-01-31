@@ -1,6 +1,6 @@
 .PHONY: all
 all: risk_sim risk_sim.s example.png
-	risk_sim 15
+	risk_sim 6
 
 .PHONY: verify
 verify: Example.hs dist/setup-config
@@ -36,4 +36,5 @@ clean:
 	-rm risk_sim
 	-rm risk_sim.c
 	-rm risk_sim.s
+	-rm -r risk_sim.dSYM
 
