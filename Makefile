@@ -33,7 +33,6 @@ clean:
 	cabal clean
 	-rm example.dot
 	-rm example.png
-	-rm risk_api_*
 	-rm risk_sim
 	-rm risk_sim.c
 	-rm risk_sim.s

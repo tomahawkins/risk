@@ -10,9 +10,6 @@ main = do
   putStrLn  "Verifying kernel given partitions specification ..."
   verifyKernel exampleSpec
 
-  putStrLn  "Generating API files for configured kernel ..."
-  generateAPI exampleSpec
-
   putStrLn  "Generating C simulator of kernel for example configuration ..."
   generateSimulator exampleSpec
 

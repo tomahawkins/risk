@@ -20,6 +20,10 @@ void risk_transfer_messages
   , word *       recv_tail
   );
 
+// Yields control back to kernel.  Yield also signals that the all
+// outgoing (send) buffers are ready for transmission.
+void risk_yield (void);
+
 #ifdef __cplusplus
 }
 #endif

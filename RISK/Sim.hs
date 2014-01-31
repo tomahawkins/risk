@@ -34,12 +34,6 @@ generateSimulator spec = writeFile "risk_sim.c" $ unlines
   , ""
   , compile spec
   , ""
-  , "// Partition yields control back to the kernel."
-  , "void risk_yield (void)"
-  , "{"
-  , "\trisk_entry();"
-  , "}"
-  , ""
   , "// RISK simulator main."
   , "int main (int argc, char **argv)"
   , "{"

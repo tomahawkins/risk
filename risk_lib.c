@@ -54,3 +54,10 @@ void risk_transfer_messages
 	}
 }
 
+// Yields control back to kernel.
+void risk_yield (void)
+{
+	void risk_entry (void);
+	risk_entry();
+}
+
