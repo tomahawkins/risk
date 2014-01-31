@@ -13,14 +13,13 @@ to minimize covert timing channels.
 
 - The [partition specification](https://github.com/tomahawkins/risk/blob/master/RISK/Spec.hs)
   and the [kernel configuration](https://github.com/tomahawkins/risk/blob/master/RISK/Config.hs) modules are defined.
-- The configurable [kernel](https://github.com/tomahawkins/risk/blob/master/RISK/Kernel.hs) is implemented in GIGL
-  with the following limitations:
-  - No IPC.
-  - No timer or IO interrupts. 
-  - No preemption.
-  - No memory protections.
-- The kernel compiler generates C from the GIGL model to provide a simulation of the kernel.
-  - Demonstrated by the flight controller example.
+- The configurable [kernel](https://github.com/tomahawkins/risk/blob/master/RISK/Kernel.hs) is partially implemented in GIGL.
+  - Round robin scheduler is running.
+  - IPC is implemented and tested.  No friendly API yet.
+  - Current limitations:
+    - No timer or IO interrupts. 
+    - No preemption.
+    - No memory protections.
 
 ## Verification Status
 
@@ -33,9 +32,14 @@ to minimize covert timing channels.
     The kernel will always yield to a user partition.
     Verified by program path enumeration.
   - [Valid Message Transfer](https://github.com/tomahawkins/risk/blob/master/RISK/Verify.hs):
-    The kernel only transfers messages between specified partitions.  Currently message transfer is handled by an abstract intrinsic.
+    The kernel only transfers messages between specified partitions.
     Verified by extracting all TransferMessages intrinsics and comparing source and destination partitions to spec.
-
+- Verification assumes correctness of:
+  - Haskell compiler.
+  - Verification analysis functions.
+  - GIGL to C code generation.
+  - Intrinsic implementation.
+  - C compiler, assembler, hardware, etc.
 
 # Random Ideas
 
@@ -123,10 +127,6 @@ head = (head + *head) % buffer_length;
 ```
 
 It is the responsibility of the receiving thread to correctly manage the receiving buffer and the head pointer.
-
-# Virtual Memory
-
-Or not...  Is it possible just to give the threads restricted DMA?
 
 # Links
 

@@ -16,9 +16,9 @@ import RISK.Spec
 
 -- | Memory is a list of recv buffers, send buffers, and a general purpose memory region.
 data PartitionMemory = PartitionMemory
-  { recvBuffers :: [(Int, Name)]  -- ^ A list of receiving buffers (log2 size, corresponding channel name).
+  { memorySize  :: Int            -- ^ Total partition memory size in log2 words.
+  , recvBuffers :: [(Int, Name)]  -- ^ A list of receiving buffers (log2 size, corresponding channel name).
   , sendBuffers :: [(Int, Name)]  -- ^ A list of sending buffers (log2 size, corresponding channel name).
-  , dataSize    :: Int            -- ^ Size of general purpose memory region.
   }
 
 -- | Kernel configuration.
@@ -43,7 +43,7 @@ configure spec' = Config
 
   -- A partitions' memory is receive and send buffers followed by general purpose memory.
   partitionMemory :: Name -> Int -> PartitionMemory
-  partitionMemory name size = PartitionMemory recvBuffers sendBuffers $ size - (length recvBuffers * 2 + (sum $ fst $ unzip $ recvBuffers ++ sendBuffers))
+  partitionMemory name size = PartitionMemory size recvBuffers sendBuffers
     where
     recvBuffers = [ (cReceiverBufferSize c, cSender   c) | c <- channels spec, cReceiver c == name ]
     sendBuffers = [ (cSenderBufferSize   c, cReceiver c) | c <- channels spec, cSender   c == name ]
@@ -52,15 +52,11 @@ configure spec' = Config
 partitionNames :: Config -> [Name]
 partitionNames = fst .unzip . partitionMemory
 
--- Partition memory size in bytes.
+-- Partition memory size in words.
 partitionMemorySize :: Config -> Name -> Int
-partitionMemorySize config name = case a of
-  [] -> error $ "No partition named: " ++ name
-  [a] -> a
-  _ -> error $ "Multiple partitions named: " ++ name
-  where
-  a = [ length recv * 2 + sum (fst $ unzip $ recv ++ send) + dat | (name', PartitionMemory recv send dat) <- partitionMemory config, name == name' ]
-  
+partitionMemorySize config name = case lookup name $ partitionMemory config of
+  Nothing -> error $ "No partition named: " ++ name
+  Just a  -> 2 ^ memorySize a
 
 -- | Total number of partitions.
 totalPartitions :: Config -> Int

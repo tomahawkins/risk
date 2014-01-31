@@ -24,6 +24,9 @@ void risk_transfer_messages
 // outgoing (send) buffers are ready for transmission.
 void risk_yield (void);
 
+// Gets a message from a receive buffer.  Returns false if no message is available.  Advances the head pointer.
+word risk_recv_msg (word mask, word * head, word tail, const word * buffer, word * msg);
+
 #ifdef __cplusplus
 }
 #endif

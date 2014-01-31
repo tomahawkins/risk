@@ -70,8 +70,8 @@ declareKernelInit = proc "risk_init" $ do
   comment "Initialize the partition memory pointers."
   intrinsic SetMemoryPtrs
   comment "Initialize the partition stack pointers."
-  sequence_ [ word64 (name ++ "_stack_ptr") <== Add (word64 $ name ++ "_memory_ptr") (Const $ fromIntegral $ partitionMemorySize config name) | name <- partitionNames config ]
-  comment "Initialize the partition channel buffer and data region pointers."
+  sequence_ [ word64 (name ++ "_stack_ptr") <== Add (word64 $ name ++ "_memory_ptr") (Const $ fromIntegral $ partitionMemorySize config name * 8) | name <- partitionNames config ]
+  comment "Initialize the partition channel pointers."
   mapM_ setPartitionPtrs $ partitionMemory config
   comment "Temporarily set the interruptSource to yield."
   interruptSource <== Const 1
@@ -79,27 +79,27 @@ declareKernelInit = proc "risk_init" $ do
   call "risk_entry"
 
 setPartitionPtrs :: (Name, PartitionMemory) -> RISK ()
-setPartitionPtrs (name, PartitionMemory recv' send' _) = recvPtrs 0 recv'
+setPartitionPtrs (name, PartitionMemory _ recv' send') = recvPtrs 0 recv'
   where
   recvPtrs :: Integer -> [(Int, Name)] -> RISK ()
   recvPtrs index a = case a of
     [] -> recv index recv'
     (_, from) : rest -> do
       word64 (printf "%s_from_%s_head_index" name from) <== add (index    ) (word64 $ printf "%s_memory_ptr" name)
-      word64 (printf "%s_from_%s_tail_index" name from) <== add (index + 1) (word64 $ printf "%s_memory_ptr" name)
-      recvPtrs (index + 2) rest
+      word64 (printf "%s_from_%s_tail_index" name from) <== add (index + 8) (word64 $ printf "%s_memory_ptr" name)
+      recvPtrs (index + 16) rest
   recv :: Integer -> [(Int, Name)] -> RISK ()
   recv index a = case a of
     [] -> send index send'
     (s, from) : rest -> do
       word64 (printf "%s_from_%s_recv_buffer" name from) <== add index (word64 $ printf "%s_memory_ptr" name)
-      recv (index + 2 ^ s) rest
+      recv (index + (2 ^ s) * 8) rest
   send :: Integer -> [(Int, Name)] -> RISK ()
   send index a = case a of
-    [] -> word64 (printf "%s_data" name) <== add index (word64 $ printf "%s_memory_ptr" name)
+    [] -> return ()
     (s, to) : rest -> do
       word64 (printf "%s_to_%s_send_buffer" name to) <== add index (word64 $ printf "%s_memory_ptr" name)
-      send (index + 2 ^ s) rest
+      send (index + (2 ^ s) * 8) rest
   add :: Integer -> E Word64 -> E Word64
   add i a = Add a $ Const $ fromIntegral i
 

@@ -25,7 +25,7 @@ generateSimulator spec = writeFile "risk_sim.c" $ unlines
   , "// Partition memories (recv buffers + send buffers + data space)."
   , unlines [ printf "static word %s_memory[%d];" name $ partitionMemorySize config name | name <- partitionNames config ]
   , "// Variables from GIGL model."
-  , unlines [ printf "static word %s;" name | name <- variables program ]
+  , unlines [ printf "word %s;" name | name <- variables program ]
   , "// Set the partition memory pointers."
   , "void risk_set_memory_ptrs(void)"
   , "{"

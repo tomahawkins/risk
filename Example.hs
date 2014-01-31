@@ -7,7 +7,7 @@ main = do
   putStrLn  "Writing graphviz diagram of partitions specification (example.dot) ..."
   writeFile "example.dot" $ graphviz exampleSpec
 
-  putStrLn  "Verifying kernel given partitions specification ..."
+  putStrLn  "Verifying kernel ..."
   verifyKernel exampleSpec
 
   putStrLn  "Generating C simulator of kernel for example configuration ..."
@@ -29,26 +29,26 @@ main = do
 exampleSpec :: Spec
 exampleSpec = Spec
   { partitions =
-    [ Partition { pName = "sensor_1",       pRate = Nothing,  pMemory = 1024 }
-    , Partition { pName = "sensor_2",       pRate = Nothing,  pMemory = 1024 }
-    , Partition { pName = "sensor_3",       pRate = Nothing,  pMemory = 1024 }
-    , Partition { pName = "sensor_voting",  pRate = Nothing,  pMemory = 1024 }
-    , Partition { pName = "control_law_1",  pRate = Nothing,  pMemory = 1024 }
-    , Partition { pName = "control_law_2",  pRate = Nothing,  pMemory = 1024 }
-    , Partition { pName = "actuator_1",     pRate = Nothing,  pMemory = 1024 }
-    , Partition { pName = "actuator_2",     pRate = Nothing,  pMemory = 1024 }
-    , Partition { pName = "actuator_3",     pRate = Nothing,  pMemory = 1024 }
+    [ Partition { pName = "sensor_1",       pRate = Nothing,  pMemory = 10 }
+    , Partition { pName = "sensor_2",       pRate = Nothing,  pMemory = 10 }
+    , Partition { pName = "sensor_3",       pRate = Nothing,  pMemory = 10 }
+    , Partition { pName = "sensor_voting",  pRate = Nothing,  pMemory = 10 }
+    , Partition { pName = "control_law_1",  pRate = Nothing,  pMemory = 10 }
+    , Partition { pName = "control_law_2",  pRate = Nothing,  pMemory = 10 }
+    , Partition { pName = "actuator_1",     pRate = Nothing,  pMemory = 10 }
+    , Partition { pName = "actuator_2",     pRate = Nothing,  pMemory = 10 }
+    , Partition { pName = "actuator_3",     pRate = Nothing,  pMemory = 10 }
     ]
   , channels =
-    [ Channel "sensor_1"      64  "sensor_voting" 64
-    , Channel "sensor_2"      64  "sensor_voting" 64
-    , Channel "sensor_3"      64  "sensor_voting" 64
-    , Channel "sensor_voting" 64  "control_law_1" 64
-    , Channel "sensor_voting" 64  "control_law_2" 64
-    , Channel "control_law_1" 64  "actuator_1"    64
-    , Channel "control_law_1" 64  "actuator_2"    64
-    , Channel "control_law_2" 64  "actuator_2"    64
-    , Channel "control_law_2" 64  "actuator_3"    64
+    [ Channel "sensor_1"      3  "sensor_voting" 3
+    , Channel "sensor_2"      3  "sensor_voting" 3
+    , Channel "sensor_3"      3  "sensor_voting" 3
+    , Channel "sensor_voting" 3  "control_law_1" 3
+    , Channel "sensor_voting" 3  "control_law_2" 3
+    , Channel "control_law_1" 3  "actuator_1"    3
+    , Channel "control_law_1" 3  "actuator_2"    3
+    , Channel "control_law_2" 3  "actuator_2"    3
+    , Channel "control_law_2" 3  "actuator_3"    3
     ]
   , scheduling = []
   }

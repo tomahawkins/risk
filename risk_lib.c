@@ -1,10 +1,12 @@
 // RISK Library.
 
+#include <stdio.h>
+
 #include "risk_lib.h"
 
 // Copies data from a linear buffer to a circular buffer.
 static void risk_copy
-  ( word n                   // Number of bytes to transfer.
+  ( word n                   // Number of words to transfer.
   , const word * src_buffer  // Source buffer.
   , word * src_index         // Source buffer starting index.  Index is incremented for every word copied.
   , word * dst_buffer        // Destination buffer.
@@ -27,9 +29,9 @@ static word risk_recv_free_space (word mask, word head, word tail)
 }
 
 // Size of next message in send buffer.  0 if no messages available.
-static word risk_size_of_next_send_msg (word size, word index, const word * buffer)
+static word risk_size_of_next_send_msg (word buffer_size, word index, const word * buffer)
 {
-	if (index >= size || buffer[index] > size - index)  // Invalid index or invalid message size.
+	if (index >= buffer_size || buffer[index] > buffer_size - index)  // Invalid index or invalid message size.
 		return 0;
 	else
 		return buffer[index];
