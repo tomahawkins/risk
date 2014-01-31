@@ -2,6 +2,7 @@
 module RISK.Compile
   ( compile
   , indent
+  , block
   ) where
 
 import Data.List (intercalate)
@@ -15,6 +16,7 @@ import RISK.Spec
 compile :: Spec -> String
 compile spec = unlines $ 
   [ printf "void %s (void);" name | (name, _) <- procs ] ++
+  [""] ++
   map compileProc procs
   where
   procs = kernelProgram spec
@@ -22,10 +24,7 @@ compile spec = unlines $
 compileProc :: (Name, Stmt Intrinsic) -> String
 compileProc (name, stmt) = unlines
   [ printf "void %s(void)" name
-  , "{"
-  , indent $ compileStmt stmt
-  , "}"
-  , ""
+  , block $ compileStmt stmt
   ]
 
 compileStmt :: Stmt Intrinsic -> String
@@ -34,12 +33,10 @@ compileStmt a = case a of
   Null -> ""
   Seq a b -> compileStmt a ++ compileStmt b
   If a b c -> unlines
-    [ printf "if (%s) {" $ compileExpr a
-    , compileStmt b
-    , "}"
-    , "else {"
-    , compileStmt c
-    , "}"
+    [ printf "if (%s)" $ compileExpr a
+    , block $ compileStmt b
+    , "else"
+    , block $ compileStmt c
     ]
   Assign (Var a) b -> printf "%s = %s;\n" a $ compileExpr b
   Assign _ _ -> error "Invalid LHS in assignment."
@@ -98,4 +95,7 @@ compileExpr a = case a of
 
 indent :: String -> String
 indent = intercalate "\n" . map ("\t" ++) . lines
+
+block :: String -> String
+block a = "{\n" ++ (indent a) ++ "\n}\n"
 

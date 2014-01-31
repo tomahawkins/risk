@@ -5,7 +5,7 @@ module RISK.API
 
 import Text.Printf
 
-import RISK.Compile (indent)
+import RISK.Compile (indent, block)
 import RISK.Config
 import RISK.Spec
 
@@ -19,7 +19,7 @@ generateAPI spec = sequence_
 
 headerFile :: Name -> PartitionMemory -> String
 headerFile name memory = unlines
-  [ "// RISK API for the " ++ name ++ " Partition"
+  [ "// The RISK API for the \"" ++ name ++ "\" partition."
   , ""
   , "#ifdef __cplusplus"
   , "extern \"C\" {"
@@ -35,8 +35,8 @@ headerFile name memory = unlines
   , ""
   , "// Receive message on incoming channels.  If no messages are available on a channel, size will be zero."
   , unlines [ printf "void %s_from_%s_recv_msg(word * size, word * msg);" name sender | (_, sender) <- recvBuffers memory ]
-  , "// Clear outgoing channels."
-  , unlines [ printf "void %s_to_%s_send_clr(void);" name receiver | (_, receiver) <- sendBuffers memory ]
+  , "// Initialize outgoing channels for transmission.  Must be called after every yield."
+  , unlines [ printf "void %s_to_%s_send_init(void);" name receiver | (_, receiver) <- sendBuffers memory ]
   , "// Transmit message on outgoing channels."
   , unlines [ printf "void %s_to_%s_send_msg(word size, word * msg);" name receiver | (_, receiver) <- sendBuffers memory ]
   , ""
@@ -48,7 +48,7 @@ headerFile name memory = unlines
 
 cFile :: Name -> PartitionMemory -> String
 cFile name memory = unlines
-  [ "// RISK API for the " ++ name ++ " Partition"
+  [ "// The RISK API for the \"" ++ name ++ "\" partition."
   , printf ""
   , printf "#include \"risk_api_%s.h\"" name
   , printf ""
@@ -68,25 +68,21 @@ cFile name memory = unlines
     , printf ""
     , printf "// Receives a message from the %s partition.  If no messages are available, size will be zero." sender
     , printf "void %s_recv_msg(word * size, word * msg)" prefix
-    , "{"
-    , indent $ unlines
+    , block $ unlines
       [ "word i;"
       , printf "if (*%s_head_index == *%s_tail_index)" prefix prefix
       , indent "*size = 0;"
-      , printf "else {"
-      , indent $ unlines
+      , printf "else"
+      , block $ unlines
         [ printf "*size = %s_recv_buffer[*%s_head_index & 0x%x];" prefix prefix mask
         , printf "*%s_head_index = *%s_head_index + 1;" prefix prefix
-        , printf "for (i = 0; i < *size; i++) {"
-        , indent $ unlines
+        , printf "for (i = 0; i < *size; i++)"
+        , block $ unlines
           [ printf "msg[i] = %s_recv_buffer[*%s_head_index & 0x%x];" prefix prefix mask
           , printf "*%s_head_index = *%s_head_index + 1;" prefix prefix
           ]
-        , "}"
         ] 
-      , "}"
       ]
-    , "}"
     , ""
     ]
     where
@@ -102,28 +98,24 @@ cFile name memory = unlines
     , printf ""
     , printf "static word %s_send_index;" prefix
     , printf ""
-    , printf "// Clear send channel."
-    , printf "void %s_send_clr(void)" prefix
-    , printf "{"
-    , indent $ unlines
-      [ printf "word i;"
-      , printf "%s_send_index = 0;" prefix
-      , printf "for (i = 0; i < 0x%xULL; i++)" $ (2 ^ size :: Int)
-      , indent $ printf "%s_send_buffer[i] = 0;" prefix
+    , printf "// Initialize the send channel.  Resets the index to the send buffer."
+    , printf "// Zeros the first (size) element in the buffer to clear it."
+    , printf "void %s_send_init(void)" prefix
+    , block $ unlines
+      [ printf "%s_send_index = 0;" prefix
+      , printf "%s_send_buffer[0] = 0;" prefix
       ]
-    , printf "}"
     , printf ""
     , printf "// Sends a message to the %s partition." receiver
     , printf "void %s_send_msg(word size, word * msg)" prefix
-    , printf "{"
-    , indent $ unlines
+    , block $ unlines
       [ printf "word i;"
       , printf "%s_send_buffer[%s_send_index++] = size;" prefix prefix
       , printf "for (i = 0; i < size; i++)"
       , indent $ printf "%s_send_buffer[%s_send_index++] = msg[i];" prefix prefix
+      , printf "%s_send_buffer[%s_send_index] = 0;" prefix prefix
       ]
-    , printf "}"
-    , printf ""
+    , ""
     ]
     where
     prefix :: String

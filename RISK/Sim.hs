@@ -24,23 +24,23 @@ generateSimulator spec = writeFile "risk_sim.c" $ unlines
   , unlines [ printf "void %s_main (void);" name | name <- partitionNames config ]
   , "// Partition memories (recv buffers + send buffers + data space)."
   , unlines [ printf "static word %s_memory[%d];" name $ partitionMemorySize config name | name <- partitionNames config ]
-  , "// Variables from GIGL model."
+  , "// Variables from kernel model."
   , unlines [ printf "word %s;" name | name <- variables program ]
   , "// Set the partition memory pointers."
   , "void risk_set_memory_ptrs(void)"
-  , "{"
-  , unlines [ printf "\t%s_memory_ptr = (word) %s_memory;" name name | name <- partitionNames config ]
-  , "}"
+  , block $ unlines [ printf "%s_memory_ptr = (word) %s_memory;" name name | name <- partitionNames config ]
   , ""
+  , "// Functions from kernel model."
   , compile spec
   , ""
   , "// RISK simulator main."
   , "int main (int argc, char **argv)"
-  , "{"
-  , "\trisk_cycle_count = atoi(argv[1]);"
-  , "\trisk_init();"
-  , "\treturn 0;"
-  , "}"
+  , block $ unlines
+    [ "// First argument to simulator is the number of scheduling steps to run."
+    , "risk_cycle_count = atoi(argv[1]);"
+    , "risk_init();"
+    , "return 0;"
+    ]
   ]
   where
   config = configure spec

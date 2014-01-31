@@ -32,13 +32,13 @@ main = do
 exampleSpec :: Spec
 exampleSpec = Spec
   { partitions =
-    [ Partition { pName = "sensor",   pRate = Nothing,  pMemory = 10 }
-    , Partition { pName = "control",  pRate = Nothing,  pMemory = 10 }
-    , Partition { pName = "actuator", pRate = Nothing,  pMemory = 10 }
+    [ Partition { pName = "sensor",     pRate = Nothing, pMemory = 10 }
+    , Partition { pName = "controller", pRate = Nothing, pMemory = 10 }
+    , Partition { pName = "actuator",   pRate = Nothing, pMemory = 10 }
     ]
   , channels =
-    [ Channel "sensor"  3  "control"  3
-    , Channel "control" 3  "actuator" 3
+    [ Channel "sensor"     3  "controller"  3
+    , Channel "controller" 3  "actuator"    3
     ]
   , scheduling = []
   }
