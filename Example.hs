@@ -13,6 +13,9 @@ main = do
   putStrLn  "Generating C simulator of kernel for example configuration ..."
   generateSimulator exampleSpec
 
+  putStrLn  "Generating API files ..."
+  generateAPI exampleSpec
+
   -- Other things you can do ...
 
   --putStrLn  "Generating example assembly program (hello.s) ..."

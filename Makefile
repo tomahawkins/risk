@@ -36,5 +36,6 @@ clean:
 	-rm risk_sim
 	-rm risk_sim.c
 	-rm risk_sim.s
+	-rm risk_api_*
 	-rm -r risk_sim.dSYM
 

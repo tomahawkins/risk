@@ -1,6 +1,7 @@
 -- | RISK: The Realtime Ifc Separation Kernal.
 module RISK
-  ( module RISK.Compile
+  ( module RISK.API
+  , module RISK.Compile
   , module RISK.Config
   , module RISK.Example
   , module RISK.Kernel
@@ -10,6 +11,7 @@ module RISK
   , module RISK.X86_64
   ) where
 
+import RISK.API
 import RISK.Compile
 import RISK.Config
 import RISK.Example

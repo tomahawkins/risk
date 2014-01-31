@@ -22,6 +22,7 @@ library
     gigl     >= 0.0.0
   exposed-modules:
     RISK
+    RISK.API
     RISK.Compile
     RISK.Config
     RISK.Example
