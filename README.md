@@ -128,6 +128,77 @@ head = (head + *head) % buffer_length;
 
 It is the responsibility of the receiving thread to correctly manage the receiving buffer and the head pointer.
 
+### Alternative Messaging Scheme
+
+Instead of separate buffers for each channel link between partitions, each parition gets one outgoing and
+one incoming buffer.  The message format now includes a partition id field: (partition id : payload size : message payload)
+When the kernel transfers messages, it replaces the target partition id with the senders' id.
+
+A channel table managed by the kernel determines if sending a message between two partitions is allowed.
+
+## Dynamic Partitions
+
+Partitions that can create and delete subpartitions.
+
+Under this proposal, partitions are not configured at compile time.  Instead, an initial root partition
+is responsible for setting up the partition configuration.
+
+Configuration passed to kernel to create new partition:
+
+- Partition memory size and location.
+- Incoming and outgoing buffer size.
+- Allowable communication channels.
+  - But if a cyclic channel is needed, all the partition ids are needed prior to creating any one partition.
+  - So a call to the kernel is needed to establish a fresh channel id.  This
+    is when the kernel registers the parent-child pair in the partition table.
+
+Once a partition is created, the parent partition can not access the child partition's memory.
+
+that can split their memory space to create new partitions and also can reclaim subpartitions.
+
+### Kernel API
+
+To make a request of the kernel, the partition and kernel communicate via a special message buffer
+that resides in the partition memory space.  The partition places the request in the buffer,
+then calls yield (also making sure the channel buffers are in a valid state).  The kernel
+executes the request and places its response back into the buffer.
+
+Kernel transaction types:
+
+- Request fresh partition id.
+  - Request:  command
+  - Response: new-partition-id
+  - Kernel returns a fresh id and logs entry in parent-child partition table.
+- Enable channel pair.  Two partition ids are allowed to communicate with each other.
+  - Request:  command src-id dest-id
+  - Response: none
+  - Kernel checks that the pair is allowable, i.e., that both ids are children of the active partition
+    or that one is a child and the other is the active partition (parent).
+- Disable channel pair.
+  - Request:  command src-id dest-id
+  - Response: none
+- Set memory location and size of child partition.
+  - Request:  command child-id location size
+  - Response: none
+- Set incoming and outgoing buffer sizes of child partition.
+  - Request:  command child-id incoming-size outgoing-size
+  - Response: none
+- Enable partition (memory and channel buffers must have been specified).
+  - Request:  command child-id
+  - Response: none
+- Disable partition.
+- Delete partition.
+
+Q: How does a parent reclaim the memory of a deleted child partition,
+   especial if it is not on the parent's partition boundry?
+
+### Kernel Data Structures
+
+- Next partition id.
+  - To allow recycling of old ids, this is captured as list of deleted partitions plus the next fresh id.
+- Parent-child partition table.
+- Allowed channel table (valid source to receiver).
+
 # Links
 
 - seL4.
